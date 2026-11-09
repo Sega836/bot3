@@ -61,22 +61,6 @@ def is_group(message):
 def is_admin(user_id):
     return user_id == ADMIN_ID
 
-# --- ПАНЕЛЬ КОМАНД ---
-def get_main_keyboard():
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    buttons = [
-        types.KeyboardButton("/golda"),
-        types.KeyboardButton("/gstats"),
-        types.KeyboardButton("/stats"),
-        types.KeyboardButton("/nation"),
-        types.KeyboardButton("/word"),
-        types.KeyboardButton("/kloun"),
-        types.KeyboardButton("/obvinit"),
-        types.KeyboardButton("/govno"),
-    ]
-    keyboard.add(*buttons)
-    return keyboard
-
 # --- СПИСКИ ---
 NATIONALITIES = ["Русский 🇷🇺", "Казах 🇰🇿", "Татарин 🏳️", "Чеченец 🏳️", "Украинец 🇺🇦", "Белорус 🇧🇾",
                  "Узбек 🇺🇿", "Армянин 🇦🇲", "Грузин 🇬🇪", "Еврей ✡️", "Китаец 🇨🇳", "Японец 🇯🇵",
@@ -118,24 +102,41 @@ def cmd_start(message):
         conn.commit()
     add_analytics("start")
 
+    # Кнопка вызова меню (Inline)
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("📋 Все команды", callback_data="show_menu"))
+
     welcome_text = (
         f"┏━━━━━━━━━━━━━━━┓\n"
         f"  👋 <b>Привет, {message.from_user.first_name}!</b>\n"
         f"┗━━━━━━━━━━━━━━━┛\n\n\n"
         f"Я — игровой бот этого чата. Здесь ты можешь фармить голду, обвинять друзей, "
         f"кидаться какашками и узнавать много нового!\n\n\n"
-        f"✨ <b>Доступные команды:</b>\n\n"
-        f"💰 /golda — забрать голду (раз в час!)\n\n"
-        f"🏆 /stats — топ богачей чата\n\n"
-        f"📊 /gstats — твой личный отчет\n\n"
-        f"🌍 /nation — узнать национальность\n\n"
-        f"💩 /govno — кинуть какашку (реплаем)\n\n"
-        f"⚖️ /obvinit — обвинить (реплаем)\n\n"
-        f"🤡 /kloun — клоун дня\n\n"
-        f"📰 /word — слово дня\n\n\n"
-        f"👇 <i>Панель с командами уже внизу экрана!</i>"
+        f"✨ <b>Как играть?</b>\n"
+        f"Нажми на синюю кнопку <b>«/»</b> слева от поля ввода, чтобы увидеть список всех команд, или нажми кнопку ниже.\n\n"
+        f"👇 <i>Панель команд теперь в системном меню Telegram.</i>"
     )
-    bot.send_message(message.chat.id, welcome_text, reply_markup=get_main_keyboard())
+    bot.send_message(message.chat.id, welcome_text, reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "show_menu")
+def show_menu_callback(call):
+    text = (
+        "┏━━━━━━━━━━━━━━━┓\n"
+        "  📖 <b>СПРАВОЧНИК КОМАНД</b>\n"
+        "┗━━━━━━━━━━━━━━━┛\n\n\n"
+        "💰 /golda — получить голду (раз в 1 час)\n\n"
+        "🏆 /stats — топ-10 богачей чата\n\n"
+        "📊 /gstats — твой отчет по голде\n\n"
+        "🌍 /nation — случайная национальность\n\n"
+        "💩 /govno (реплай) — кинуть какашку\n\n"
+        "📰 /word — слово дня\n\n"
+        "⚖️ /obvinit (реплай) — обвинить юзера\n\n"
+        "🤡 /kloun — выбрать клоуна дня\n\n\n"
+        "💡 <i>Все команды также доступны в меню «/».</i>"
+    )
+    bot.send_message(call.message.chat.id, text)
+    bot.answer_callback_query(call.id)
 
 
 @bot.message_handler(commands=["help"])
@@ -154,9 +155,9 @@ def cmd_help(message):
         "📰 /word — слово дня\n\n"
         "⚖️ /obvinit (реплай) — обвинить юзера\n\n"
         "🤡 /kloun — выбрать клоуна дня\n\n\n"
-        "💡 <i>Используй панель внизу экрана для быстрого доступа.</i>"
+        "💡 <i>Все команды также доступны в меню «/».</i>"
     )
-    bot.send_message(message.chat.id, text, reply_markup=get_main_keyboard())
+    bot.send_message(message.chat.id, text)
 
 
 @bot.message_handler(commands=["golda"])
@@ -558,7 +559,7 @@ if __name__ == "__main__":
             f"━━━━━━━━━━━━━━━\n\n"
             f"🕒 Время: <b>{now_str}</b>\n\n"
             f"🟢 Статус: Онлайн\n\n"
-            f"⚙️ Версия: 3.1 (Telebot)",
+            f"⚙️ Версия: 4.0 (Menu API)",
         )
     except Exception as e:
         print(f"Не удалось отправить уведомление админу: {e}")
