@@ -389,10 +389,15 @@ def cmd_obvinit(message):
         return
 
     template = random.choice(ACCUSATION_TEMPLATES)
+    
+    # --- ИСПРАВЛЕНИЕ: МЕНЯЕМ МЕСТАМИ АРГУМЕНТЫ ---
+    # Первым подставляется ЖЕРТВА (target), вторым ОБВИНИТЕЛЬ (accuser).
+    # Теперь жертва выглядит виновной перед обвинителем.
     accusation_text = template.format(
-        f'<a href="tg://user?id={accuser.id}">{accuser.first_name}</a>',
-        f'<a href="tg://user?id={target.id}">{target.first_name}</a>'
+        f'<a href="tg://user?id={target.id}">{target.first_name}</a>',
+        f'<a href="tg://user?id={accuser.id}">{accuser.first_name}</a>'
     )
+    # ----------------------------------------------
 
     markup = types.InlineKeyboardMarkup()
     markup.add(
@@ -623,7 +628,7 @@ if __name__ == "__main__":
             f"━━━━━━━━━━━━━━━\n\n"
             f"🕒 Время: <b>{now_str}</b>\n\n"
             f"🟢 Статус: Онлайн\n\n"
-            f"⚙️ Версия: 6.0 (Final Fix)",
+            f"⚙️ Версия: 7.0 (Accuser Wins)",
         )
     except Exception as e:
         print(f"Не удалось отправить уведомление админу: {e}")
