@@ -333,38 +333,41 @@ def cmd_stats(message):
 
 
 # ============================================================
-# ОБВИНЕНИЯ
+# ОБВИНЕНИЯ (ОБВИНИТЕЛЬ ВСЕГДА ПРАВ)
 # ============================================================
 
 def finish_accusation(chat_id, msg_id):
     with sqlite3.connect(DB_NAME) as conn:
         cur = conn.cursor()
-        cur.execute("SELECT text, votes_yes, votes_no FROM accusations WHERE msg_id = ?", (msg_id,))
+        cur.execute("SELECT text, votes_yes, votes_no, target_id FROM accusations WHERE msg_id = ?", (msg_id,))
         res = cur.fetchone()
         if not res:
             return
-        text, yes, no = res
+        text, yes, no, target_id = res
 
-        if yes > no:
-            result = "🟢 <b>ПРАВДА!</b> Обвиняемый признан виновным."
-        elif no > yes:
-            result = "🔴 <b>НЕПРАВДА!</b> Это была грязная клевета."
-        else:
-            result = "🟡 <b>НИЧЬЯ!</b> Голоса разделились."
+        # Обвинитель ВСЕГДА прав.
+        result = "🟢 <b>ПРАВДА!</b> Обвиняемый официально признан виновным."
+        
+        # Бонус: за каждый голос "Да" обвиняемый теряет 10 голды (в качестве штрафа)
+        penalty = yes * 10
+        if penalty > 0:
+            cur.execute("UPDATE users SET gold = MAX(0, gold - ?) WHERE user_id = ?", (penalty, target_id))
 
         final_text = (
             f"⚖️ <b>СУД ОКОНЧЕН!</b>\n\n"
             f"━━━━━━━━━━━━━━━\n\n"
             f"{text}\n\n"
             f"━━━━━━━━━━━━━━━\n\n"
-            f"✅ Правда: <b>{yes}</b>\n\n"
-            f"❌ Ложь: <b>{no}</b>\n\n\n"
-            f"👨‍⚖️ Вердикт: {result}"
+            f"✅ Голосов за обвинение: <b>{yes}</b>\n\n"
+            f"❌ Голосов против: <b>{no}</b> <i>(проигнорированы)</i>\n\n\n"
+            f"👨‍⚖️ Вердикт: {result}\n\n"
+            f"💸 Обвиняемый оштрафован на <b>{penalty}</b> голды!"
         )
         try:
             bot.edit_message_text(final_text, chat_id=chat_id, message_id=msg_id)
         except Exception as e:
             logging.error(f"edit_message error: {e}")
+        
         cur.execute("DELETE FROM accusations WHERE msg_id = ?", (msg_id,))
         conn.commit()
 
@@ -393,8 +396,8 @@ def cmd_obvinit(message):
 
     markup = types.InlineKeyboardMarkup()
     markup.add(
-        types.InlineKeyboardButton("✅ Правда (0)", callback_data=f"vote_yes_{message.from_user.id}"),
-        types.InlineKeyboardButton("❌ Ложь (0)", callback_data=f"vote_no_{message.from_user.id}")
+        types.InlineKeyboardButton("✅ Виновен (0)", callback_data=f"vote_yes_{message.from_user.id}"),
+        types.InlineKeyboardButton("❌ Опять невиновен (0)", callback_data=f"vote_no_{message.from_user.id}")
     )
 
     court_text = (
@@ -402,7 +405,7 @@ def cmd_obvinit(message):
         f"━━━━━━━━━━━━━━━\n\n"
         f"{accusation_text}\n\n"
         f"━━━━━━━━━━━━━━━\n\n"
-        f"🗳️ <i>Голосуйте кнопками ниже! (1 минута)</i>"
+        f"🗳️ <i>Голосуйте кнопками ниже! (1 минута)\nОбвинитель всегда побеждает, но каждый голос «Виновен» — это -10 голды для жертвы!</i>"
     )
     msg = safe_send(message.chat.id, court_text, reply_markup=markup, reply_to=message.message_id)
 
@@ -424,7 +427,7 @@ def process_vote(call):
     action, author_id = parts[1], int(parts[2])
 
     if call.from_user.id == author_id:
-        bot.answer_callback_query(call.id, "Нельзя голосовать за себя!", show_alert=True)
+        bot.answer_callback_query(call.id, "Обвинитель не может голосовать за себя!", show_alert=True)
         return
 
     with sqlite3.connect(DB_NAME) as conn:
@@ -445,8 +448,8 @@ def process_vote(call):
 
     markup = types.InlineKeyboardMarkup()
     markup.add(
-        types.InlineKeyboardButton(f"✅ Правда ({yes})", callback_data=f"vote_yes_{author_id}"),
-        types.InlineKeyboardButton(f"❌ Ложь ({no})", callback_data=f"vote_no_{author_id}")
+        types.InlineKeyboardButton(f"✅ Виновен ({yes})", callback_data=f"vote_yes_{author_id}"),
+        types.InlineKeyboardButton(f"❌ Опять невиновен ({no})", callback_data=f"vote_no_{author_id}")
     )
     try:
         bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
@@ -620,7 +623,7 @@ if __name__ == "__main__":
             f"━━━━━━━━━━━━━━━\n\n"
             f"🕒 Время: <b>{now_str}</b>\n\n"
             f"🟢 Статус: Онлайн\n\n"
-            f"⚙️ Версия: 5.0 (Final)",
+            f"⚙️ Версия: 6.0 (Final Fix)",
         )
     except Exception as e:
         print(f"Не удалось отправить уведомление админу: {e}")
