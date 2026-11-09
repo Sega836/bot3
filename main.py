@@ -3,17 +3,43 @@ import random
 import sqlite3
 import logging
 import threading
+import time
 from datetime import datetime, timedelta
 import telebot
 from telebot import types
+from telebot.apihelper import ApiTelegramException
 
 # --- НАСТРОЙКИ ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = 6597229121
 DB_NAME = "game_bot.db"
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
+
+# --- БЕЗОПАСНАЯ ОТПРАВКА (ANTI-FLOOD) ---
+def safe_send(chat_id, text, reply_markup=None, reply_to=None):
+    """Отправка сообщения с защитой от бана за флуд (429)."""
+    try:
+        if reply_to:
+            return bot.send_message(chat_id, text, reply_markup=reply_markup, reply_to_message_id=reply_to)
+        return bot.send_message(chat_id, text, reply_markup=reply_markup)
+    except ApiTelegramException as e:
+        if e.error_code == 429:
+            retry_after = e.result_json.get('parameters', {}).get('retry_after', 30)
+            logging.warning(f"Флуд-бан! Ждем {retry_after} секунд...")
+            time.sleep(retry_after)
+            try:
+                if reply_to:
+                    return bot.send_message(chat_id, text, reply_markup=reply_markup, reply_to_message_id=reply_to)
+                return bot.send_message(chat_id, text, reply_markup=reply_markup)
+            except Exception as e2:
+                logging.error(f"Повторная ошибка отправки: {e2}")
+        else:
+            logging.error(f"Ошибка Telegram API: {e}")
+    except Exception as e:
+        logging.error(f"Неизвестная ошибка отправки: {e}")
+    return None
 
 # --- БАЗА ДАННЫХ ---
 def init_db():
@@ -102,10 +128,6 @@ def cmd_start(message):
         conn.commit()
     add_analytics("start")
 
-    # Кнопка вызова меню (Inline)
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("📋 Все команды", callback_data="show_menu"))
-
     welcome_text = (
         f"┏━━━━━━━━━━━━━━━┓\n"
         f"  👋 <b>Привет, {message.from_user.first_name}!</b>\n"
@@ -113,30 +135,10 @@ def cmd_start(message):
         f"Я — игровой бот этого чата. Здесь ты можешь фармить голду, обвинять друзей, "
         f"кидаться какашками и узнавать много нового!\n\n\n"
         f"✨ <b>Как играть?</b>\n"
-        f"Нажми на синюю кнопку <b>«/»</b> слева от поля ввода, чтобы увидеть список всех команд, или нажми кнопку ниже.\n\n"
-        f"👇 <i>Панель команд теперь в системном меню Telegram.</i>"
+        f"Нажми на синюю кнопку <b>«/»</b> слева от поля ввода, чтобы увидеть список всех команд.\n\n"
+        f"👇 <i>Все команды доступны в системном меню Telegram.</i>"
     )
-    bot.send_message(message.chat.id, welcome_text, reply_markup=markup)
-
-
-@bot.callback_query_handler(func=lambda call: call.data == "show_menu")
-def show_menu_callback(call):
-    text = (
-        "┏━━━━━━━━━━━━━━━┓\n"
-        "  📖 <b>СПРАВОЧНИК КОМАНД</b>\n"
-        "┗━━━━━━━━━━━━━━━┛\n\n\n"
-        "💰 /golda — получить голду (раз в 1 час)\n\n"
-        "🏆 /stats — топ-10 богачей чата\n\n"
-        "📊 /gstats — твой отчет по голде\n\n"
-        "🌍 /nation — случайная национальность\n\n"
-        "💩 /govno (реплай) — кинуть какашку\n\n"
-        "📰 /word — слово дня\n\n"
-        "⚖️ /obvinit (реплай) — обвинить юзера\n\n"
-        "🤡 /kloun — выбрать клоуна дня\n\n\n"
-        "💡 <i>Все команды также доступны в меню «/».</i>"
-    )
-    bot.send_message(call.message.chat.id, text)
-    bot.answer_callback_query(call.id)
+    safe_send(message.chat.id, welcome_text)
 
 
 @bot.message_handler(commands=["help"])
@@ -157,7 +159,7 @@ def cmd_help(message):
         "🤡 /kloun — выбрать клоуна дня\n\n\n"
         "💡 <i>Все команды также доступны в меню «/».</i>"
     )
-    bot.send_message(message.chat.id, text)
+    safe_send(message.chat.id, text)
 
 
 @bot.message_handler(commands=["golda"])
@@ -178,7 +180,7 @@ def cmd_golda(message):
         if passed < timedelta(hours=1):
             remaining = timedelta(hours=1) - passed
             minutes = remaining.seconds // 60
-            bot.reply_to(message, f"⏳ <b>Кулдаун!</b>\n\nТы уже забирал голду. Приходи через <b>{minutes} мин.</b>")
+            safe_send(message.chat.id, f"⏳ <b>Кулдаун!</b>\n\nТы уже забирал голду. Приходи через <b>{minutes} мин.</b>", reply_to=message.message_id)
             return
 
     earned_gold = random.randint(300, 800)
@@ -188,12 +190,12 @@ def cmd_golda(message):
         conn.commit()
     add_analytics("daily")
 
-    bot.reply_to(message,
+    safe_send(message.chat.id,
         f"💸 <b>ГОЛДА ПОЛУЧЕНА!</b>\n\n"
         f"━━━━━━━━━━━━━━━\n\n"
         f"Тебе начислено: <b>{earned_gold}</b> 💰\n\n"
         f"Следующий сбор доступен через 1 час.\n\n"
-        f"━━━━━━━━━━━━━━━")
+        f"━━━━━━━━━━━━━━━", reply_to=message.message_id)
 
 
 @bot.message_handler(commands=["gstats"])
@@ -202,7 +204,7 @@ def cmd_gstats(message):
         return
     user = get_user(message.from_user.id)
     if not user:
-        bot.reply_to(message, "Сначала напиши /start, чтобы зарегистрироваться в игре.")
+        safe_send(message.chat.id, "Сначала напиши /start, чтобы зарегистрироваться в игре.", reply_to=message.message_id)
         return
 
     gold, total_earned = user[3], user[4]
@@ -224,7 +226,7 @@ def cmd_gstats(message):
         f"💎 Заработано всего: <b>{total_earned}</b> голды\n\n"
         f"🕒 Следующий сбор: <b>{next_daily}</b>"
     )
-    bot.reply_to(message, text)
+    safe_send(message.chat.id, text, reply_to=message.message_id)
 
 
 @bot.message_handler(commands=["nation"])
@@ -233,12 +235,12 @@ def cmd_nation(message):
         return
     nation = random.choice(NATIONALITIES)
     add_analytics("nation")
-    bot.reply_to(message,
+    safe_send(message.chat.id,
         f"🧬 <b>АНАЛИЗ ДНК ЗАВЕРШЕН</b>\n\n"
         f"━━━━━━━━━━━━━━━\n\n"
         f"Твоя национальность: <b>{nation}</b>\n\n"
         f"━━━━━━━━━━━━━━━\n\n"
-        f"<i>Результат может измениться в следующий раз.</i>")
+        f"<i>Результат может измениться в следующий раз.</i>", reply_to=message.message_id)
 
 
 @bot.message_handler(commands=["word"])
@@ -246,11 +248,11 @@ def cmd_word(message):
     if not is_group(message):
         return
     word = random.choice(WORDS_OF_DAY)
-    bot.reply_to(message,
+    safe_send(message.chat.id,
         f"📰 <b>СЛОВО ДНЯ</b>\n\n"
         f"━━━━━━━━━━━━━━━\n\n"
         f"👉 {word}\n\n"
-        f"━━━━━━━━━━━━━━━")
+        f"━━━━━━━━━━━━━━━", reply_to=message.message_id)
 
 
 @bot.message_handler(commands=["kloun"])
@@ -266,13 +268,13 @@ def cmd_kloun(message):
         if res and res[1] == today:
             cur.execute("SELECT first_name FROM users WHERE user_id = ?", (res[0],))
             user_name = cur.fetchone()[0]
-            bot.reply_to(message, f"🤡 Сегодняшний <b>Клоун дня</b> уже выбран!\n\nЭто <b>{user_name}</b>. Ждите завтра.")
+            safe_send(message.chat.id, f"🤡 Сегодняшний <b>Клоун дня</b> уже выбран!\n\nЭто <b>{user_name}</b>. Ждите завтра.", reply_to=message.message_id)
             return
 
         cur.execute("SELECT user_id, first_name FROM users ORDER BY RANDOM() LIMIT 1")
         clown = cur.fetchone()
         if not clown:
-            bot.reply_to(message, "В базе пока нет пользователей.")
+            safe_send(message.chat.id, "В базе пока нет пользователей.", reply_to=message.message_id)
             return
 
     clown_id, clown_name = clown
@@ -284,11 +286,11 @@ def cmd_kloun(message):
         conn.commit()
     add_analytics("kloun")
 
-    bot.reply_to(message,
+    safe_send(message.chat.id,
         f"🎪 <b>ЦИРК ПРИЕХАЛ!</b>\n\n"
         f"━━━━━━━━━━━━━━━\n\n"
         f"{text}\n\n"
-        f"━━━━━━━━━━━━━━━")
+        f"━━━━━━━━━━━━━━━", reply_to=message.message_id)
 
 
 @bot.message_handler(commands=["govno"])
@@ -296,19 +298,19 @@ def cmd_govno(message):
     if not is_group(message):
         return
     if not message.reply_to_message:
-        bot.reply_to(message, "🎯 Кинь какашку кому-то! Для этого ответь на сообщение жертвы командой /govno")
+        safe_send(message.chat.id, "🎯 Кинь какашку кому-то! Для этого ответь на сообщение жертвы командой /govno", reply_to=message.message_id)
         return
     target = message.reply_to_message.from_user
     sender = message.from_user
     if target.id == sender.id:
-        bot.reply_to(message, "🤢 Нельзя кидать какашки в самого себя!")
+        safe_send(message.chat.id, "🤢 Нельзя кидать какашки в самого себя!", reply_to=message.message_id)
         return
     text = random.choice(POO_TEMPLATES).format(
         f'<a href="tg://user?id={sender.id}">{sender.first_name}</a>',
         f'<a href="tg://user?id={target.id}">{target.first_name}</a>'
     )
     add_analytics("poo")
-    bot.reply_to(message, f"💩 <b>АТАКА КАКАШКАМИ!</b>\n\n{text}")
+    safe_send(message.chat.id, f"💩 <b>АТАКА КАКАШКАМИ!</b>\n\n{text}", reply_to=message.message_id)
 
 
 @bot.message_handler(commands=["stats"])
@@ -318,7 +320,7 @@ def cmd_stats(message):
     with sqlite3.connect(DB_NAME) as conn:
         top_users = conn.execute("SELECT first_name, gold FROM users ORDER BY gold DESC LIMIT 10").fetchall()
     if not top_users:
-        bot.reply_to(message, "Пока нет статистики.")
+        safe_send(message.chat.id, "Пока нет статистики.", reply_to=message.message_id)
         return
 
     text = "🏆 <b>ТОП-10 БОГАЧЕЙ ЧАТА</b>\n\n━━━━━━━━━━━━━━━\n\n<pre>"
@@ -327,7 +329,7 @@ def cmd_stats(message):
         text += f"{i:2}. {display_name:<14} | {gold:>6} 💰\n"
     text += "</pre>\n\n━━━━━━━━━━━━━━━"
     add_analytics("stats")
-    bot.send_message(message.chat.id, text)
+    safe_send(message.chat.id, text, reply_to=message.message_id)
 
 
 # ============================================================
@@ -372,15 +374,15 @@ def cmd_obvinit(message):
     if not is_group(message):
         return
     if not message.reply_to_message:
-        bot.reply_to(message, "⚖️ Чтобы обвинить кого-то, ответь на его сообщение командой /obvinit")
+        safe_send(message.chat.id, "⚖️ Чтобы обвинить кого-то, ответь на его сообщение командой /obvinit", reply_to=message.message_id)
         return
     target = message.reply_to_message.from_user
     accuser = message.from_user
     if target.id == accuser.id:
-        bot.reply_to(message, "🩺 Шизофрения? Обвинять самого себя это кринж.")
+        safe_send(message.chat.id, "🩺 Шизофрения? Обвинять самого себя это кринж.", reply_to=message.message_id)
         return
     if target.is_bot:
-        bot.reply_to(message, "🤖 Ботов обвинять нельзя.")
+        safe_send(message.chat.id, "🤖 Ботов обвинять нельзя.", reply_to=message.message_id)
         return
 
     template = random.choice(ACCUSATION_TEMPLATES)
@@ -402,17 +404,18 @@ def cmd_obvinit(message):
         f"━━━━━━━━━━━━━━━\n\n"
         f"🗳️ <i>Голосуйте кнопками ниже! (1 минута)</i>"
     )
-    msg = bot.reply_to(message, court_text, reply_markup=markup)
+    msg = safe_send(message.chat.id, court_text, reply_markup=markup, reply_to=message.message_id)
 
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("INSERT INTO accusations (msg_id, chat_id, accuser_id, target_id, text) VALUES (?, ?, ?, ?, ?)",
-                     (msg.message_id, message.chat.id, accuser.id, target.id, accusation_text))
-        conn.commit()
-    add_analytics("accuse")
+    if msg:
+        with sqlite3.connect(DB_NAME) as conn:
+            conn.execute("INSERT INTO accusations (msg_id, chat_id, accuser_id, target_id, text) VALUES (?, ?, ?, ?, ?)",
+                         (msg.message_id, message.chat.id, accuser.id, target.id, accusation_text))
+            conn.commit()
+        add_analytics("accuse")
 
-    timer = threading.Timer(60, finish_accusation, args=[message.chat.id, msg.message_id])
-    timer.daemon = True
-    timer.start()
+        timer = threading.Timer(60, finish_accusation, args=[message.chat.id, msg.message_id])
+        timer.daemon = True
+        timer.start()
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("vote_"))
@@ -459,12 +462,13 @@ def process_vote(call):
 @bot.message_handler(commands=["admin"], func=lambda m: m.chat.type == "private")
 def cmd_admin(message):
     if not is_admin(message.from_user.id):
-        bot.send_message(message.chat.id, "У вас нет доступа к этой команде.")
+        safe_send(message.chat.id, "У вас нет доступа к этой команде.")
         return
 
-    markup = types.InlineKeyboardMarkup()
+    markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(types.InlineKeyboardButton("📊 Статистика (Текст)", callback_data="admin_stats"))
     markup.add(types.InlineKeyboardButton("📈 График прироста", callback_data="admin_graph"))
+    markup.add(types.InlineKeyboardButton("👑 Админ-хелп", callback_data="admin_help"))
 
     text = (
         "┏━━━━━━━━━━━━━━━┓\n"
@@ -472,7 +476,43 @@ def cmd_admin(message):
         "┗━━━━━━━━━━━━━━━┛\n\n\n"
         "Выберите действие:"
     )
-    bot.send_message(message.chat.id, text, reply_markup=markup)
+    safe_send(message.chat.id, text, reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "admin_help")
+def admin_help_callback(call):
+    if not is_admin(call.from_user.id):
+        return
+    send_admin_help(call.message.chat.id)
+    bot.answer_callback_query(call.id)
+
+
+@bot.message_handler(commands=["ahelp"], func=lambda m: m.chat.type == "private")
+def cmd_ahelp(message):
+    if not is_admin(message.from_user.id):
+        safe_send(message.chat.id, "У вас нет доступа к этой команде.")
+        return
+    send_admin_help(message.chat.id)
+
+
+def send_admin_help(chat_id):
+    text = (
+        "┏━━━━━━━━━━━━━━━┓\n"
+        "  👑 <b>АДМИН-СПРАВКА</b>\n"
+        "┗━━━━━━━━━━━━━━━┛\n\n\n"
+        "⚙️ <b>Основные команды:</b>\n\n"
+        "📊 /admin — открыть панель управления (кнопки)\n\n"
+        "📢 /rass (реплай) — разослать сообщение во все чаты, где есть бот\n\n"
+        "👑 /ahelp — эта справка\n\n\n"
+        "📈 <b>Что можно в панели /admin:</b>\n\n"
+        "• <b>Статистика</b> — сколько юзеров, чатов, выдано дейликов и действий за сегодня.\n\n"
+        "• <b>График прироста</b> — текстовый график активности за последние 7 дней.\n\n\n"
+        "🔧 <b>Полезные советы:</b>\n\n"
+        "• Меню команд («/») настраивается автоматически при запуске бота.\n\n"
+        "• Если бот не видит команды в группах — отключите Privacy Mode в @BotFather и перезайдите бота в группу.\n\n"
+        "• Если бот долго не отвечает на ваши сообщения — это бан Telegram за флуд (429). Подождите 10–60 минут."
+    )
+    safe_send(chat_id, text)
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "admin_stats")
@@ -495,7 +535,7 @@ def admin_stats(call):
         f"💰 Выдано дейликов: <b>{total_daily}</b>\n\n"
         f"⚡️ Действий за сегодня: <b>{today_actions}</b>"
     )
-    bot.send_message(call.message.chat.id, text)
+    safe_send(call.message.chat.id, text)
     bot.answer_callback_query(call.id)
 
 
@@ -506,7 +546,7 @@ def admin_graph(call):
     with sqlite3.connect(DB_NAME) as conn:
         data = conn.execute("SELECT date, COUNT(*) FROM analytics GROUP BY date ORDER BY date DESC LIMIT 7").fetchall()[::-1]
     if not data:
-        bot.send_message(call.message.chat.id, "Пока нет данных для графика.")
+        safe_send(call.message.chat.id, "Пока нет данных для графика.")
         return
 
     text = "📈 <b>ГРАФИК АКТИВНОСТИ</b>\n\n━━━━━━━━━━━━━━━\n\n<pre>"
@@ -515,7 +555,7 @@ def admin_graph(call):
         bar = "█" * int((count / max_val) * 10)
         text += f"{date} | {bar} ({count})\n"
     text += "</pre>"
-    bot.send_message(call.message.chat.id, text)
+    safe_send(call.message.chat.id, text)
     bot.answer_callback_query(call.id)
 
 
@@ -524,42 +564,63 @@ def cmd_rass(message):
     if not is_admin(message.from_user.id):
         return
     if not message.reply_to_message:
-        bot.reply_to(message, "Ответьте на сообщение, которое хотите разослать, командой /rass")
+        safe_send(message.chat.id, "Ответьте на сообщение, которое хотите разослать, командой /rass")
         return
     broadcast_text = message.reply_to_message.text or message.reply_to_message.caption
     if not broadcast_text:
-        bot.reply_to(message, "В сообщении нет текста.")
+        safe_send(message.chat.id, "В сообщении нет текста.")
         return
 
     with sqlite3.connect(DB_NAME) as conn:
         chats = conn.execute("SELECT chat_id FROM chats").fetchall()
 
     success, fail = 0, 0
-    msg = bot.reply_to(message, f"🚀 Начинаю рассылку на {len(chats)} чатов...")
+    msg = safe_send(message.chat.id, f"🚀 Начинаю рассылку на {len(chats)} чатов...")
     for (chat_id,) in chats:
         try:
             bot.send_message(chat_id, f"📢 <b>РАССЫЛКА ОТ АДМИНА:</b>\n\n{broadcast_text}")
             success += 1
+            time.sleep(0.05) # Задержка чтобы не забанили
         except Exception:
             fail += 1
-    bot.edit_message_text(f"✅ Рассылка завершена.\n\nУспешно: {success}\n\nОшибок: {fail}",
-                          chat_id=message.chat.id, message_id=msg.message_id)
+    if msg:
+        bot.edit_message_text(f"✅ Рассылка завершена.\n\nУспешно: {success}\n\nОшибок: {fail}",
+                              chat_id=message.chat.id, message_id=msg.message_id)
 
 
 # ============================================================
-# ЗАПУСК + УВЕДОМЛЕНИЕ АДМИНУ
+# ЗАПУСК + АВТОУСТАНОВКА МЕНЮ + УВЕДОМЛЕНИЕ
 # ============================================================
 if __name__ == "__main__":
     print("Бот запущен!")
+    
+    # --- АВТОМАТИЧЕСКАЯ УСТАНОВКА МЕНЮ КОМАНД ---
+    try:
+        commands = [
+            types.BotCommand("golda", "💰 Забрать голду"),
+            types.BotCommand("gstats", "📊 Мой профиль"),
+            types.BotCommand("stats", "🏆 Топ игроков"),
+            types.BotCommand("nation", "🌍 Узнать национальность"),
+            types.BotCommand("word", "📰 Слово дня"),
+            types.BotCommand("kloun", "🤡 Клоун дня"),
+            types.BotCommand("obvinit", "⚖️ Обвинить (реплай)"),
+            types.BotCommand("govno", "💩 Кинуть какашку (реплай)")
+        ]
+        bot.set_my_commands(commands)
+        print("Меню команд успешно обновлено!")
+    except Exception as e:
+        print(f"Не удалось обновить меню команд: {e}")
+    # --------------------------------------------
+
     try:
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        bot.send_message(
+        safe_send(
             ADMIN_ID,
             f"🚀 <b>БОТ УСПЕШНО ЗАПУЩЕН!</b>\n\n"
             f"━━━━━━━━━━━━━━━\n\n"
             f"🕒 Время: <b>{now_str}</b>\n\n"
             f"🟢 Статус: Онлайн\n\n"
-            f"⚙️ Версия: 4.0 (Menu API)",
+            f"⚙️ Версия: 5.0 (Final)",
         )
     except Exception as e:
         print(f"Не удалось отправить уведомление админу: {e}")
