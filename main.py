@@ -61,6 +61,22 @@ def is_group(message):
 def is_admin(user_id):
     return user_id == ADMIN_ID
 
+# --- ПАНЕЛЬ КОМАНД ---
+def get_main_keyboard():
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    buttons = [
+        types.KeyboardButton("/golda"),
+        types.KeyboardButton("/gstats"),
+        types.KeyboardButton("/stats"),
+        types.KeyboardButton("/nation"),
+        types.KeyboardButton("/word"),
+        types.KeyboardButton("/kloun"),
+        types.KeyboardButton("/obvinit"),
+        types.KeyboardButton("/govno"),
+    ]
+    keyboard.add(*buttons)
+    return keyboard
+
 # --- СПИСКИ ---
 NATIONALITIES = ["Русский 🇷🇺", "Казах 🇰🇿", "Татарин 🏳️", "Чеченец 🏳️", "Украинец 🇺🇦", "Белорус 🇧🇾",
                  "Узбек 🇺🇿", "Армянин 🇦🇲", "Грузин 🇬🇪", "Еврей ✡️", "Китаец 🇨🇳", "Японец 🇯🇵",
@@ -81,11 +97,11 @@ POO_TEMPLATES = [
 WORDS_OF_DAY = ["Кринж 😬", "Базед 🗿", "Скибиди 🚽", "Вайб ✨", "Ауф 🐺", "Рофл 😂",
                 "Шейминг 👎", "Краш 😍", "Слэй 💅", "Чилл 🛋️", "Буллинг 🥊", "Гоуст 👻"]
 CLOWN_TEMPLATES = [
-    "🤡 <b>Клоун дня</b> в этом чате — {}\n📌 Причина: пытался доказать, что земля плоская.",
-    "🤡 <b>Клоун дня</b> — {}\n📌 Причина: написал бывшей в 3 часа ночи.",
-    "🤡 <b>Клоун дня</b> — {}\n📌 Причина: зашел в чат и сразу вышел.",
-    "🤡 <b>Клоун дня</b> — {}\n📌 Причина: поспорил с ботом.",
-    "🤡 <b>Клоун дня</b> — {}\n📌 Причина: съел шаурму с майонезом в 4 утра."
+    "🤡 <b>Клоун дня</b> в этом чате — {}\n\n📌 Причина: пытался доказать, что земля плоская.",
+    "🤡 <b>Клоун дня</b> — {}\n\n📌 Причина: написал бывшей в 3 часа ночи.",
+    "🤡 <b>Клоун дня</b> — {}\n\n📌 Причина: зашел в чат и сразу вышел.",
+    "🤡 <b>Клоун дня</b> — {}\n\n📌 Причина: поспорил с ботом.",
+    "🤡 <b>Клоун дня</b> — {}\n\n📌 Причина: съел шаурму с майонезом в 4 утра."
 ]
 
 # ============================================================
@@ -105,21 +121,21 @@ def cmd_start(message):
     welcome_text = (
         f"┏━━━━━━━━━━━━━━━┓\n"
         f"  👋 <b>Привет, {message.from_user.first_name}!</b>\n"
-        f"┗━━━━━━━━━━━━━━━┛\n\n"
+        f"┗━━━━━━━━━━━━━━━┛\n\n\n"
         f"Я — игровой бот этого чата. Здесь ты можешь фармить голду, обвинять друзей, "
-        f"кидаться какашками и узнавать много нового!\n\n"
-        f"✨ <b>Доступные команды:</b>\n"
-        f"💰 <code>/daily</code> — забрать голду (раз в час!)\n"
-        f"🏆 <code>/stats</code> — топ богачей чата\n"
-        f"📊 <code>/gstats</code> — твой личный отчет\n"
-        f"🌍 <code>/nation</code> — узнать национальность\n"
-        f"💩 <code>/poo</code> — кинуть какашку (реплаем)\n"
-        f"⚖️ <code>/accuse</code> — обвинить (реплаем)\n"
-        f"🤡 <code>/kloun</code> — клоун дня\n"
-        f"📰 <code>/word</code> — слово дня\n\n"
-        f"👇 <i>Нажми на команду, чтобы скопировать её.</i>"
+        f"кидаться какашками и узнавать много нового!\n\n\n"
+        f"✨ <b>Доступные команды:</b>\n\n"
+        f"💰 /golda — забрать голду (раз в час!)\n\n"
+        f"🏆 /stats — топ богачей чата\n\n"
+        f"📊 /gstats — твой личный отчет\n\n"
+        f"🌍 /nation — узнать национальность\n\n"
+        f"💩 /govno — кинуть какашку (реплаем)\n\n"
+        f"⚖️ /obvinit — обвинить (реплаем)\n\n"
+        f"🤡 /kloun — клоун дня\n\n"
+        f"📰 /word — слово дня\n\n\n"
+        f"👇 <i>Панель с командами уже внизу экрана!</i>"
     )
-    bot.send_message(message.chat.id, welcome_text)
+    bot.send_message(message.chat.id, welcome_text, reply_markup=get_main_keyboard())
 
 
 @bot.message_handler(commands=["help"])
@@ -129,22 +145,22 @@ def cmd_help(message):
     text = (
         "┏━━━━━━━━━━━━━━━┓\n"
         "  📖 <b>СПРАВОЧНИК КОМАНД</b>\n"
-        "┗━━━━━━━━━━━━━━━┛\n\n"
-        "💰 <code>/daily</code> — получить голду (раз в 1 час)\n"
-        "🏆 <code>/stats</code> — топ-10 богачей чата\n"
-        "📊 <code>/gstats</code> — твой отчет по голде\n"
-        "🌍 <code>/nation</code> — случайная национальность\n"
-        "💩 <code>/poo</code> (реплай) — кинуть какашку\n"
-        "📰 <code>/word</code> — слово дня\n"
-        "⚖️ <code>/accuse</code> (реплай) — обвинить юзера\n"
-        "🤡 <code>/kloun</code> — выбрать клоуна дня\n\n"
-        "💡 <i>Совет: нажми на команду, чтобы она скопировалась.</i>"
+        "┗━━━━━━━━━━━━━━━┛\n\n\n"
+        "💰 /golda — получить голду (раз в 1 час)\n\n"
+        "🏆 /stats — топ-10 богачей чата\n\n"
+        "📊 /gstats — твой отчет по голде\n\n"
+        "🌍 /nation — случайная национальность\n\n"
+        "💩 /govno (реплай) — кинуть какашку\n\n"
+        "📰 /word — слово дня\n\n"
+        "⚖️ /obvinit (реплай) — обвинить юзера\n\n"
+        "🤡 /kloun — выбрать клоуна дня\n\n\n"
+        "💡 <i>Используй панель внизу экрана для быстрого доступа.</i>"
     )
-    bot.send_message(message.chat.id, text)
+    bot.send_message(message.chat.id, text, reply_markup=get_main_keyboard())
 
 
-@bot.message_handler(commands=["daily"])
-def cmd_daily(message):
+@bot.message_handler(commands=["golda"])
+def cmd_golda(message):
     if not is_group(message):
         return
     user = get_user(message.from_user.id)
@@ -161,7 +177,7 @@ def cmd_daily(message):
         if passed < timedelta(hours=1):
             remaining = timedelta(hours=1) - passed
             minutes = remaining.seconds // 60
-            bot.reply_to(message, f"⏳ <b>Кулдаун!</b>\nТы уже забирал голду. Приходи через <b>{minutes} мин.</b>")
+            bot.reply_to(message, f"⏳ <b>Кулдаун!</b>\n\nТы уже забирал голду. Приходи через <b>{minutes} мин.</b>")
             return
 
     earned_gold = random.randint(300, 800)
@@ -172,10 +188,10 @@ def cmd_daily(message):
     add_analytics("daily")
 
     bot.reply_to(message,
-        f"💸 <b>ГОЛДА ПОЛУЧЕНА!</b>\n"
-        f"━━━━━━━━━━━━━━━\n"
-        f"Тебе начислено: <b>{earned_gold}</b> 💰\n"
-        f"Следующий сбор доступен через 1 час.\n"
+        f"💸 <b>ГОЛДА ПОЛУЧЕНА!</b>\n\n"
+        f"━━━━━━━━━━━━━━━\n\n"
+        f"Тебе начислено: <b>{earned_gold}</b> 💰\n\n"
+        f"Следующий сбор доступен через 1 час.\n\n"
         f"━━━━━━━━━━━━━━━")
 
 
@@ -201,10 +217,10 @@ def cmd_gstats(message):
     text = (
         f"┏━━━━━━━━━━━━━━━┓\n"
         f"  📊 <b>ОТЧЕТ ПО ГОЛДЕ</b>\n"
-        f"┗━━━━━━━━━━━━━━━┛\n\n"
-        f"👤 Игрок: <b>{message.from_user.first_name}</b>\n"
-        f"💰 Баланс: <b>{gold}</b> голды\n"
-        f"💎 Заработано всего: <b>{total_earned}</b> голды\n"
+        f"┗━━━━━━━━━━━━━━━┛\n\n\n"
+        f"👤 Игрок: <b>{message.from_user.first_name}</b>\n\n"
+        f"💰 Баланс: <b>{gold}</b> голды\n\n"
+        f"💎 Заработано всего: <b>{total_earned}</b> голды\n\n"
         f"🕒 Следующий сбор: <b>{next_daily}</b>"
     )
     bot.reply_to(message, text)
@@ -217,10 +233,10 @@ def cmd_nation(message):
     nation = random.choice(NATIONALITIES)
     add_analytics("nation")
     bot.reply_to(message,
-        f"🧬 <b>АНАЛИЗ ДНК ЗАВЕРШЕН</b>\n"
-        f"━━━━━━━━━━━━━━━\n"
-        f"Твоя национальность: <b>{nation}</b>\n"
-        f"━━━━━━━━━━━━━━━\n"
+        f"🧬 <b>АНАЛИЗ ДНК ЗАВЕРШЕН</b>\n\n"
+        f"━━━━━━━━━━━━━━━\n\n"
+        f"Твоя национальность: <b>{nation}</b>\n\n"
+        f"━━━━━━━━━━━━━━━\n\n"
         f"<i>Результат может измениться в следующий раз.</i>")
 
 
@@ -230,9 +246,9 @@ def cmd_word(message):
         return
     word = random.choice(WORDS_OF_DAY)
     bot.reply_to(message,
-        f"📰 <b>СЛОВО ДНЯ</b>\n"
-        f"━━━━━━━━━━━━━━━\n"
-        f"👉 {word}\n"
+        f"📰 <b>СЛОВО ДНЯ</b>\n\n"
+        f"━━━━━━━━━━━━━━━\n\n"
+        f"👉 {word}\n\n"
         f"━━━━━━━━━━━━━━━")
 
 
@@ -249,7 +265,7 @@ def cmd_kloun(message):
         if res and res[1] == today:
             cur.execute("SELECT first_name FROM users WHERE user_id = ?", (res[0],))
             user_name = cur.fetchone()[0]
-            bot.reply_to(message, f"🤡 Сегодняшний <b>Клоун дня</b> уже выбран!\nЭто <b>{user_name}</b>. Ждите завтра.")
+            bot.reply_to(message, f"🤡 Сегодняшний <b>Клоун дня</b> уже выбран!\n\nЭто <b>{user_name}</b>. Ждите завтра.")
             return
 
         cur.execute("SELECT user_id, first_name FROM users ORDER BY RANDOM() LIMIT 1")
@@ -268,18 +284,18 @@ def cmd_kloun(message):
     add_analytics("kloun")
 
     bot.reply_to(message,
-        f"🎪 <b>ЦИРК ПРИЕХАЛ!</b>\n"
-        f"━━━━━━━━━━━━━━━\n"
-        f"{text}\n"
+        f"🎪 <b>ЦИРК ПРИЕХАЛ!</b>\n\n"
+        f"━━━━━━━━━━━━━━━\n\n"
+        f"{text}\n\n"
         f"━━━━━━━━━━━━━━━")
 
 
-@bot.message_handler(commands=["poo"])
-def cmd_poo(message):
+@bot.message_handler(commands=["govno"])
+def cmd_govno(message):
     if not is_group(message):
         return
     if not message.reply_to_message:
-        bot.reply_to(message, "🎯 Кинь какашку кому-то! Для этого ответь на сообщение жертвы командой /poo")
+        bot.reply_to(message, "🎯 Кинь какашку кому-то! Для этого ответь на сообщение жертвы командой /govno")
         return
     target = message.reply_to_message.from_user
     sender = message.from_user
@@ -304,11 +320,11 @@ def cmd_stats(message):
         bot.reply_to(message, "Пока нет статистики.")
         return
 
-    text = "🏆 <b>ТОП-10 БОГАЧЕЙ ЧАТА</b>\n━━━━━━━━━━━━━━━\n<pre>"
+    text = "🏆 <b>ТОП-10 БОГАЧЕЙ ЧАТА</b>\n\n━━━━━━━━━━━━━━━\n\n<pre>"
     for i, (name, gold) in enumerate(top_users, 1):
         display_name = (name[:12] + '..') if len(name) > 12 else name
         text += f"{i:2}. {display_name:<14} | {gold:>6} 💰\n"
-    text += "</pre>━━━━━━━━━━━━━━━"
+    text += "</pre>\n\n━━━━━━━━━━━━━━━"
     add_analytics("stats")
     bot.send_message(message.chat.id, text)
 
@@ -334,12 +350,12 @@ def finish_accusation(chat_id, msg_id):
             result = "🟡 <b>НИЧЬЯ!</b> Голоса разделились."
 
         final_text = (
-            f"⚖️ <b>СУД ОКОНЧЕН!</b>\n"
-            f"━━━━━━━━━━━━━━━\n"
-            f"{text}\n"
-            f"━━━━━━━━━━━━━━━\n"
-            f"✅ Правда: <b>{yes}</b>\n"
-            f"❌ Ложь: <b>{no}</b>\n\n"
+            f"⚖️ <b>СУД ОКОНЧЕН!</b>\n\n"
+            f"━━━━━━━━━━━━━━━\n\n"
+            f"{text}\n\n"
+            f"━━━━━━━━━━━━━━━\n\n"
+            f"✅ Правда: <b>{yes}</b>\n\n"
+            f"❌ Ложь: <b>{no}</b>\n\n\n"
             f"👨‍⚖️ Вердикт: {result}"
         )
         try:
@@ -350,12 +366,12 @@ def finish_accusation(chat_id, msg_id):
         conn.commit()
 
 
-@bot.message_handler(commands=["accuse"])
-def cmd_accuse(message):
+@bot.message_handler(commands=["obvinit"])
+def cmd_obvinit(message):
     if not is_group(message):
         return
     if not message.reply_to_message:
-        bot.reply_to(message, "⚖️ Чтобы обвинить кого-то, ответь на его сообщение командой /accuse")
+        bot.reply_to(message, "⚖️ Чтобы обвинить кого-то, ответь на его сообщение командой /obvinit")
         return
     target = message.reply_to_message.from_user
     accuser = message.from_user
@@ -379,10 +395,10 @@ def cmd_accuse(message):
     )
 
     court_text = (
-        f"⚖️ <b>ОБВИНЕНИЕ В СУДЕ!</b>\n"
-        f"━━━━━━━━━━━━━━━\n"
-        f"{accusation_text}\n"
-        f"━━━━━━━━━━━━━━━\n"
+        f"⚖️ <b>ОБВИНЕНИЕ В СУДЕ!</b>\n\n"
+        f"━━━━━━━━━━━━━━━\n\n"
+        f"{accusation_text}\n\n"
+        f"━━━━━━━━━━━━━━━\n\n"
         f"🗳️ <i>Голосуйте кнопками ниже! (1 минута)</i>"
     )
     msg = bot.reply_to(message, court_text, reply_markup=markup)
@@ -452,7 +468,7 @@ def cmd_admin(message):
     text = (
         "┏━━━━━━━━━━━━━━━┓\n"
         "  👑 <b>АДМИН-ПАНЕЛЬ</b>\n"
-        "┗━━━━━━━━━━━━━━━┛\n\n"
+        "┗━━━━━━━━━━━━━━━┛\n\n\n"
         "Выберите действие:"
     )
     bot.send_message(message.chat.id, text, reply_markup=markup)
@@ -471,11 +487,11 @@ def admin_stats(call):
         today_actions = cur.execute("SELECT COUNT(*) FROM analytics WHERE date=?", (today,)).fetchone()[0]
 
     text = (
-        f"📊 <b>ОБЩАЯ СТАТИСТИКА БОТА</b>\n"
-        f"━━━━━━━━━━━━━━━\n"
-        f"👥 Пользователей: <b>{total_users}</b>\n"
-        f"💬 Чатов: <b>{total_chats}</b>\n"
-        f"💰 Выдано дейликов: <b>{total_daily}</b>\n"
+        f"📊 <b>ОБЩАЯ СТАТИСТИКА БОТА</b>\n\n"
+        f"━━━━━━━━━━━━━━━\n\n"
+        f"👥 Пользователей: <b>{total_users}</b>\n\n"
+        f"💬 Чатов: <b>{total_chats}</b>\n\n"
+        f"💰 Выдано дейликов: <b>{total_daily}</b>\n\n"
         f"⚡️ Действий за сегодня: <b>{today_actions}</b>"
     )
     bot.send_message(call.message.chat.id, text)
@@ -492,7 +508,7 @@ def admin_graph(call):
         bot.send_message(call.message.chat.id, "Пока нет данных для графика.")
         return
 
-    text = "📈 <b>ГРАФИК АКТИВНОСТИ</b>\n━━━━━━━━━━━━━━━\n<pre>"
+    text = "📈 <b>ГРАФИК АКТИВНОСТИ</b>\n\n━━━━━━━━━━━━━━━\n\n<pre>"
     max_val = max(row[1] for row in data) if data else 1
     for date, count in data:
         bar = "█" * int((count / max_val) * 10)
@@ -525,7 +541,7 @@ def cmd_rass(message):
             success += 1
         except Exception:
             fail += 1
-    bot.edit_message_text(f"✅ Рассылка завершена.\nУспешно: {success}\nОшибок: {fail}",
+    bot.edit_message_text(f"✅ Рассылка завершена.\n\nУспешно: {success}\n\nОшибок: {fail}",
                           chat_id=message.chat.id, message_id=msg.message_id)
 
 
@@ -538,11 +554,11 @@ if __name__ == "__main__":
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         bot.send_message(
             ADMIN_ID,
-            f"🚀 <b>БОТ УСПЕШНО ЗАПУЩЕН!</b>\n"
-            f"━━━━━━━━━━━━━━━\n"
-            f"🕒 Время: <code>{now_str}</code>\n"
-            f"🟢 Статус: Онлайн\n"
-            f"⚙️ Версия: 3.0 (Telebot)",
+            f"🚀 <b>БОТ УСПЕШНО ЗАПУЩЕН!</b>\n\n"
+            f"━━━━━━━━━━━━━━━\n\n"
+            f"🕒 Время: <b>{now_str}</b>\n\n"
+            f"🟢 Статус: Онлайн\n\n"
+            f"⚙️ Версия: 3.1 (Telebot)",
         )
     except Exception as e:
         print(f"Не удалось отправить уведомление админу: {e}")
