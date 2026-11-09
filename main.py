@@ -4,10 +4,14 @@ import sqlite3
 import logging
 import threading
 import time
+import io
 from datetime import datetime, timedelta
 import telebot
 from telebot import types
 from telebot.apihelper import ApiTelegramException
+import matplotlib
+matplotlib.use('Agg')  # Важно для работы на сервере без экрана
+import matplotlib.pyplot as plt
 
 # --- НАСТРОЙКИ ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -17,9 +21,8 @@ DB_NAME = "game_bot.db"
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 
-# --- БЕЗОПАСНАЯ ОТПРАВКА (ANTI-FLOOD) ---
+# --- БЕЗОПАСНАЯ ОТПРАВКА ---
 def safe_send(chat_id, text, reply_markup=None, reply_to=None):
-    """Отправка сообщения с защитой от бана за флуд (429)."""
     try:
         if reply_to:
             return bot.send_message(chat_id, text, reply_markup=reply_markup, reply_to_message_id=reply_to)
@@ -34,11 +37,11 @@ def safe_send(chat_id, text, reply_markup=None, reply_to=None):
                     return bot.send_message(chat_id, text, reply_markup=reply_markup, reply_to_message_id=reply_to)
                 return bot.send_message(chat_id, text, reply_markup=reply_markup)
             except Exception as e2:
-                logging.error(f"Повторная ошибка отправки: {e2}")
+                logging.error(f"Повторная ошибка: {e2}")
         else:
-            logging.error(f"Ошибка Telegram API: {e}")
+            logging.error(f"Ошибка API: {e}")
     except Exception as e:
-        logging.error(f"Неизвестная ошибка отправки: {e}")
+        logging.error(f"Ошибка: {e}")
     return None
 
 # --- БАЗА ДАННЫХ ---
@@ -47,9 +50,9 @@ def init_db():
         c = conn.cursor()
         c.execute("""CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT,
-            gold INTEGER DEFAULT 0, total_earned INTEGER DEFAULT 0, last_daily TEXT
+            gold INTEGER DEFAULT 0, total_earned INTEGER DEFAULT 0, last_daily TEXT, join_date TEXT
         )""")
-        c.execute("""CREATE TABLE IF NOT EXISTS chats (chat_id INTEGER PRIMARY KEY)""")
+        c.execute("""CREATE TABLE IF NOT EXISTS chats (chat_id INTEGER PRIMARY KEY, title TEXT)""")
         c.execute("""CREATE TABLE IF NOT EXISTS accusations (
             msg_id INTEGER PRIMARY KEY, chat_id INTEGER, accuser_id INTEGER,
             target_id INTEGER, text TEXT, votes_yes INTEGER DEFAULT 0, votes_no INTEGER DEFAULT 0
@@ -70,9 +73,12 @@ def get_user(user_id):
         return conn.execute("SELECT * FROM users WHERE user_id = ?", (user_id,)).fetchone()
 
 def register_user(user_id, username, first_name):
+    today = datetime.now().strftime("%Y-%m-%d")
     with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("INSERT OR IGNORE INTO users (user_id, username, first_name) VALUES (?, ?, ?)",
-                     (user_id, username, first_name))
+        conn.execute("""INSERT INTO users (user_id, username, first_name, join_date) 
+                        VALUES (?, ?, ?, ?) 
+                        ON CONFLICT(user_id) DO UPDATE SET username=excluded.username, first_name=excluded.first_name""",
+                     (user_id, username, first_name, today))
         conn.commit()
 
 def add_analytics(action_type):
@@ -115,7 +121,7 @@ CLOWN_TEMPLATES = [
 ]
 
 # ============================================================
-# ИГРОВЫЕ КОМАНДЫ (ТОЛЬКО ДЛЯ ГРУПП)
+# ИГРОВЫЕ КОМАНДЫ
 # ============================================================
 
 @bot.message_handler(commands=["start"])
@@ -124,7 +130,7 @@ def cmd_start(message):
         return
     register_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
     with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("INSERT OR IGNORE INTO chats (chat_id) VALUES (?)", (message.chat.id,))
+        conn.execute("INSERT OR IGNORE INTO chats (chat_id, title) VALUES (?, ?)", (message.chat.id, message.chat.title))
         conn.commit()
     add_analytics("start")
 
@@ -139,7 +145,6 @@ def cmd_start(message):
         f"👇 <i>Все команды доступны в системном меню Telegram.</i>"
     )
     safe_send(message.chat.id, welcome_text)
-
 
 @bot.message_handler(commands=["help"])
 def cmd_help(message):
@@ -160,7 +165,6 @@ def cmd_help(message):
         "💡 <i>Все команды также доступны в меню «/».</i>"
     )
     safe_send(message.chat.id, text)
-
 
 @bot.message_handler(commands=["golda"])
 def cmd_golda(message):
@@ -197,7 +201,6 @@ def cmd_golda(message):
         f"Следующий сбор доступен через 1 час.\n\n"
         f"━━━━━━━━━━━━━━━", reply_to=message.message_id)
 
-
 @bot.message_handler(commands=["gstats"])
 def cmd_gstats(message):
     if not is_group(message):
@@ -228,7 +231,6 @@ def cmd_gstats(message):
     )
     safe_send(message.chat.id, text, reply_to=message.message_id)
 
-
 @bot.message_handler(commands=["nation"])
 def cmd_nation(message):
     if not is_group(message):
@@ -242,7 +244,6 @@ def cmd_nation(message):
         f"━━━━━━━━━━━━━━━\n\n"
         f"<i>Результат может измениться в следующий раз.</i>", reply_to=message.message_id)
 
-
 @bot.message_handler(commands=["word"])
 def cmd_word(message):
     if not is_group(message):
@@ -253,7 +254,6 @@ def cmd_word(message):
         f"━━━━━━━━━━━━━━━\n\n"
         f"👉 {word}\n\n"
         f"━━━━━━━━━━━━━━━", reply_to=message.message_id)
-
 
 @bot.message_handler(commands=["kloun"])
 def cmd_kloun(message):
@@ -292,7 +292,6 @@ def cmd_kloun(message):
         f"{text}\n\n"
         f"━━━━━━━━━━━━━━━", reply_to=message.message_id)
 
-
 @bot.message_handler(commands=["govno"])
 def cmd_govno(message):
     if not is_group(message):
@@ -312,7 +311,6 @@ def cmd_govno(message):
     add_analytics("poo")
     safe_send(message.chat.id, f"💩 <b>АТАКА КАКАШКАМИ!</b>\n\n{text}", reply_to=message.message_id)
 
-
 @bot.message_handler(commands=["stats"])
 def cmd_stats(message):
     if not is_group(message):
@@ -331,9 +329,8 @@ def cmd_stats(message):
     add_analytics("stats")
     safe_send(message.chat.id, text, reply_to=message.message_id)
 
-
 # ============================================================
-# ОБВИНЕНИЯ (ОБВИНИТЕЛЬ ВСЕГДА ПРАВ)
+# ОБВИНЕНИЯ
 # ============================================================
 
 def finish_accusation(chat_id, msg_id):
@@ -345,10 +342,7 @@ def finish_accusation(chat_id, msg_id):
             return
         text, yes, no, target_id = res
 
-        # Обвинитель ВСЕГДА прав.
         result = "🟢 <b>ПРАВДА!</b> Обвиняемый официально признан виновным."
-        
-        # Бонус: за каждый голос "Да" обвиняемый теряет 10 голды (в качестве штрафа)
         penalty = yes * 10
         if penalty > 0:
             cur.execute("UPDATE users SET gold = MAX(0, gold - ?) WHERE user_id = ?", (penalty, target_id))
@@ -371,7 +365,6 @@ def finish_accusation(chat_id, msg_id):
         cur.execute("DELETE FROM accusations WHERE msg_id = ?", (msg_id,))
         conn.commit()
 
-
 @bot.message_handler(commands=["obvinit"])
 def cmd_obvinit(message):
     if not is_group(message):
@@ -390,7 +383,6 @@ def cmd_obvinit(message):
 
     template = random.choice(ACCUSATION_TEMPLATES)
     
-    # Первым подставляется ЖЕРТВА (target), вторым ОБВИНИТЕЛЬ (accuser).
     accusation_text = template.format(
         f'<a href="tg://user?id={target.id}">{target.first_name}</a>',
         f'<a href="tg://user?id={accuser.id}">{accuser.first_name}</a>'
@@ -421,7 +413,6 @@ def cmd_obvinit(message):
         timer = threading.Timer(60, finish_accusation, args=[message.chat.id, msg.message_id])
         timer.daemon = True
         timer.start()
-
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("vote_"))
 def process_vote(call):
@@ -459,192 +450,148 @@ def process_vote(call):
         pass
     bot.answer_callback_query(call.id, "Голос учтен!")
 
-
 # ============================================================
-# РАСШИРЕННАЯ АДМИН-ПАНЕЛЬ
+# АДМИН ПАНЕЛЬ (ВЫГРУЗКА ГРУПП В TXT + ГРАФИКИ)
 # ============================================================
 
 @bot.message_handler(commands=["admin"], func=lambda m: m.chat.type == "private")
 def cmd_admin(message):
     if not is_admin(message.from_user.id):
-        safe_send(message.chat.id, "У вас нет доступа к этой команде.")
+        safe_send(message.chat.id, "У вас нет доступа.")
         return
 
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    markup.add(types.InlineKeyboardButton("📊 Статистика (Текст)", callback_data="admin_stats"))
-    markup.add(types.InlineKeyboardButton("📈 График прироста", callback_data="admin_graph"))
-    markup.add(types.InlineKeyboardButton("👑 Админ-хелп", callback_data="admin_help"))
+    with sqlite3.connect(DB_NAME) as conn:
+        chats = conn.execute("SELECT chat_id, title FROM chats").fetchall()
+        total_users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        total_actions = conn.execute("SELECT COUNT(*) FROM analytics").fetchone()[0]
+        today = datetime.now().strftime("%Y-%m-%d")
+        today_actions = conn.execute("SELECT COUNT(*) FROM analytics WHERE date=?", (today,)).fetchone()[0]
 
-    text = (
-        "┏━━━━━━━━━━━━━━━┓\n"
-        "  👑 <b>АДМИН-ПАНЕЛЬ</b>\n"
-        "┗━━━━━━━━━━━━━━━┛\n\n\n"
-        "Выберите действие:"
+    # 1. Отправляем краткую статистику
+    stats_text = (
+        f"👑 <b>ПАНЕЛЬ АДМИНИСТРАТОРА</b>\n\n"
+        f"━━━━━━━━━━━━━━━\n\n"
+        f"👥 Всего пользователей: <b>{total_users}</b>\n"
+        f"⚡️ Действий за сегодня: <b>{today_actions}</b>\n"
+        f"📊 Действий за всё время: <b>{total_actions}</b>\n"
+        f"💬 Всего групп в базе: <b>{len(chats)}</b>\n\n"
+        f"📄 <i>Полный список групп отправлен отдельным файлом ниже.</i>"
     )
-    safe_send(message.chat.id, text, reply_markup=markup)
+    safe_send(message.chat.id, stats_text)
 
+    # 2. Генерируем .txt файл со списком групп
+    if chats:
+        file_content = "СПИСОК ГРУПП, В КОТОРЫХ НАХОДИТСЯ БОТ\n"
+        file_content += "=" * 40 + "\n\n"
+        for i, (chat_id, title) in enumerate(chats, 1):
+            t = title if title else "Без названия"
+            file_content += f"{i}. {t}\n   ID: {chat_id}\n\n"
+            
+        with open("groups_list.txt", "w", encoding="utf-8") as f:
+            f.write(file_content)
+            
+        with open("groups_list.txt", "rb") as f:
+            bot.send_document(message.chat.id, f, caption="📄 <b>Список групп (.txt)</b>", parse_mode="HTML")
+        os.remove("groups_list.txt")
+    else:
+        safe_send(message.chat.id, "⚠️ Бот пока не добавлен ни в одну группу.")
 
-@bot.callback_query_handler(func=lambda call: call.data == "admin_help")
-def admin_help_callback(call):
+    # 3. Отправляем графики с переключателем
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton("📅 За 7 дней", callback_data="period_7"),
+        types.InlineKeyboardButton("🗓 За всё время", callback_data="period_all")
+    )
+    safe_send(message.chat.id, "👇 <b>Выберите период для графиков:</b>", reply_markup=markup)
+    
+    # Графики по умолчанию за 7 дней
+    send_graphs(message.chat.id, days=7)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("period_"))
+def process_period(call):
     if not is_admin(call.from_user.id):
         return
-    send_admin_help(call.message.chat.id)
-    bot.answer_callback_query(call.id)
-
-
-@bot.message_handler(commands=["ahelp"], func=lambda m: m.chat.type == "private")
-def cmd_ahelp(message):
-    if not is_admin(message.from_user.id):
-        safe_send(message.chat.id, "У вас нет доступа к этой команде.")
-        return
-    send_admin_help(message.chat.id)
-
-
-def send_admin_help(chat_id):
-    text = (
-        "👑 <b>Команды администратора</b>\n\n"
-        "📊 <b>Аналитика:</b>\n"
-        "• /stats — Подробная статистика\n"
-        "• /fullreport — Выгрузить ВСЮ аналитику в TXT\n"
-        "• /ex — Графики за 7 дней\n"
-        "• /exall — Графики за всё время\n"
-        "• /groups — Список групп из базы\n"
-        "• /globaltop — Глобальный топ игроков\n\n"
-        "🛠 <b>Управление:</b>\n"
-        "• /an (ответом) — Рассылка\n"
-        "• /do — Скачать базы данных\n"
-        "• /deluser (ответом) — Удалить юзера\n"
-        "• /del — ОЧИСТИТЬ ВСЕ БАЗЫ\n"
-        "• /fixbugs — Перекачать жуков (сброс зависших игр)"
-    )
-    safe_send(chat_id, text)
-
-
-@bot.message_handler(commands=["stats"], func=lambda m: m.chat.type == "private")
-def cmd_admin_stats(message):
-    if not is_admin(message.from_user.id): return
     
-    with sqlite3.connect(DB_NAME) as conn:
-        cur = conn.cursor()
-        total_groups = cur.execute("SELECT COUNT(*) FROM chats").fetchone()[0]
-        total_users = cur.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        active_users = cur.execute("SELECT COUNT(*) FROM users WHERE gold > 0").fetchone()[0]
-        conversion = (active_users / total_users * 100) if total_users > 0 else 0
-        total_actions = cur.execute("SELECT COUNT(*) FROM analytics").fetchone()[0]
-        week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
-        week_actions = cur.execute("SELECT COUNT(*) FROM analytics WHERE date >= ?", (week_ago,)).fetchone()[0]
-        week_users = cur.execute("SELECT COUNT(*) FROM users WHERE last_daily >= ?", (week_ago,)).fetchone()[0]
-
-    text = (
-        f"📈 <b>ПОЛНАЯ СТАТИСТИКА БОТА</b>\n\n"
-        f"👥 <b>Охват аудитории:</b>\n"
-        f"• Всего активных групп: <b>{total_groups}</b>\n"
-        f"• Уникальных игроков: <b>{total_users}</b>\n\n"
-        f"🎮 <b>Вовлеченность:</b>\n"
-        f"• Всего записей в базе: <b>{total_users}</b>\n"
-        f"• Конверсия в игру: <b>{conversion:.2f}%</b>\n\n"
-        f"🎲 <b>Игровой процесс:</b>\n"
-        f"• Всего действий: <b>{total_actions}</b>\n"
-        f"• Действий за 7 дней: <b>{week_actions}</b>\n"
-        f"• Новых игроков за 7 дней: <b>{week_users}</b>"
-    )
-    safe_send(message.chat.id, text)
-
-
-@bot.message_handler(commands=["fullreport"], func=lambda m: m.chat.type == "private")
-def cmd_fullreport(message):
-    if not is_admin(message.from_user.id): return
+    # Удаляем старое сообщение с кнопками
+    try:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception:
+        pass
     
-    with sqlite3.connect(DB_NAME) as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT date, action_type, COUNT(*) FROM analytics GROUP BY date, action_type ORDER BY date DESC")
-        data = cur.fetchall()
-        
-    report = "ПОЛНЫЙ ОТЧЕТ ПО АНАЛИТИКЕ\n" + "="*30 + "\n\n"
-    current_date = None
-    for date, action, count in data:
-        if date != current_date:
-            report += f"\n📅 {date}\n"
-            current_date = date
-        report += f"  - {action}: {count}\n"
-        
-    with open("report.txt", "w", encoding="utf-8") as f:
-        f.write(report)
-        
-    with open("report.txt", "rb") as f:
-        bot.send_document(message.chat.id, f)
-        
-    os.remove("report.txt")
-
-
-@bot.message_handler(commands=["ex"], func=lambda m: m.chat.type == "private")
-def cmd_ex_7days(message):
-    if not is_admin(message.from_user.id): return
+    period = call.data.split("_")[1]
     
+    # Удаляем прошлые графики (они были отправлены до кнопки)
+    # В Telegram нельзя удалить пачку сообщений, поэтому просто отправляем новые
+    if period == "7":
+        send_graphs(call.message.chat.id, days=7)
+    else:
+        send_graphs(call.message.chat.id, days=0)
+        
+    bot.answer_callback_query(call.id, "Графики обновлены!")
+
+def send_graphs(chat_id, days=7):
     with sqlite3.connect(DB_NAME) as conn:
-        week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
-        data = conn.execute("SELECT date, COUNT(*) FROM analytics WHERE date >= ? GROUP BY date ORDER BY date", (week_ago,)).fetchall()
+        dates = []
+        actions = []
+        users = []
         
-    if not data:
-        safe_send(message.chat.id, "Нет данных за последние 7 дней.")
-        return
-        
-    text = "📊 <b>АКТИВНОСТЬ ЗА 7 ДНЕЙ</b>\n\n<pre>"
-    max_val = max(r[1] for r in data)
-    for date, count in data:
-        bar = "█" * int((count / max_val) * 15)
-        text += f"{date[5:]} | {bar} ({count})\n"
-    text += "</pre>"
-    safe_send(message.chat.id, text)
+        if days > 0:
+            for i in range(days - 1, -1, -1):
+                d = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+                dates.append((datetime.now() - timedelta(days=i)).strftime("%d.%m"))
+                
+                act_count = conn.execute("SELECT COUNT(*) FROM analytics WHERE date=?", (d,)).fetchone()[0]
+                actions.append(act_count)
+                
+                usr_count = conn.execute("SELECT COUNT(*) FROM users WHERE join_date=?", (d,)).fetchone()[0]
+                users.append(usr_count)
+        else:
+            rows = conn.execute("SELECT date, COUNT(*) FROM analytics GROUP BY date ORDER BY date").fetchall()
+            for d, count in rows:
+                dates.append(d[5:])
+                actions.append(count)
+            
+            rows_u = conn.execute("SELECT join_date, COUNT(*) FROM users GROUP BY join_date ORDER BY join_date").fetchall()
+            for d, count in rows_u:
+                if d[5:] in dates:
+                    users[dates.index(d[5:])] = count
 
+    if not dates:
+        dates = ["Нет данных"]
+        actions = [0]
+        users = [0]
 
-@bot.message_handler(commands=["exall"], func=lambda m: m.chat.type == "private")
-def cmd_ex_all(message):
-    if not is_admin(message.from_user.id): return
+    # График 1: Активность
+    plt.figure(figsize=(8, 4))
+    plt.plot(dates, actions, marker='o', color='#2ecc71', linewidth=2)
+    plt.title('Рост обращений к боту', fontsize=14)
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
     
-    with sqlite3.connect(DB_NAME) as conn:
-        data = conn.execute("SELECT date, COUNT(*) FROM analytics GROUP BY date ORDER BY date").fetchall()
-        
-    if not data:
-        safe_send(message.chat.id, "Нет данных.")
-        return
-        
-    text = "📊 <b>АКТИВНОСТЬ ЗА ВСЁ ВРЕМЯ</b>\n\n<pre>"
-    max_val = max(r[1] for r in data)
-    for date, count in data:
-        bar = "█" * int((count / max_val) * 10)
-        text += f"{date[5:]} | {bar} ({count})\n"
-    text += "</pre>"
-    safe_send(message.chat.id, text)
+    buf1 = io.BytesIO()
+    plt.savefig(buf1, format='png', dpi=100)
+    buf1.seek(0)
+    plt.close()
+    bot.send_photo(chat_id, buf1, caption="📈 <b>График активности</b>", parse_mode="HTML")
 
-
-@bot.message_handler(commands=["groups"], func=lambda m: m.chat.type == "private")
-def cmd_groups(message):
-    if not is_admin(message.from_user.id): return
+    # График 2: Новые пользователи
+    plt.figure(figsize=(8, 4))
+    plt.bar(dates, users, color='#3498db')
+    plt.title('Количество новых пользователей', fontsize=14)
+    plt.grid(axis='y', linestyle='--', alpha=0.6)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
     
-    with sqlite3.connect(DB_NAME) as conn:
-        chats = conn.execute("SELECT chat_id FROM chats").fetchall()
-        
-    text = f"💬 <b>СПИСОК ГРУПП ({len(chats)}):</b>\n\n"
-    for (chat_id,) in chats:
-        text += f"<code>{chat_id}</code>\n"
-    safe_send(message.chat.id, text)
+    buf2 = io.BytesIO()
+    plt.savefig(buf2, format='png', dpi=100)
+    buf2.seek(0)
+    plt.close()
+    bot.send_photo(chat_id, buf2, caption="📊 <b>График прироста</b>", parse_mode="HTML")
 
-
-@bot.message_handler(commands=["globaltop"], func=lambda m: m.chat.type == "private")
-def cmd_globaltop(message):
-    if not is_admin(message.from_user.id): return
-    
-    with sqlite3.connect(DB_NAME) as conn:
-        top = conn.execute("SELECT first_name, gold FROM users ORDER BY gold DESC LIMIT 20").fetchall()
-        
-    text = "🌍 <b>ГЛОБАЛЬНЫЙ ТОП-20 ИГРОКОВ</b>\n\n<pre>"
-    for i, (name, gold) in enumerate(top, 1):
-        name = (name[:10] + '..') if len(name) > 10 else name
-        text += f"{i:2}. {name:<12} | {gold:>6} 💰\n"
-    text += "</pre>"
-    safe_send(message.chat.id, text)
-
+# ============================================================
+# РАССЫЛКА
+# ============================================================
 
 @bot.message_handler(commands=["an"], func=lambda m: m.chat.type == "private")
 def cmd_broadcast(message):
@@ -662,7 +609,7 @@ def cmd_broadcast(message):
         chats = conn.execute("SELECT chat_id FROM chats").fetchall()
         
     success, fail = 0, 0
-    msg = safe_send(message.chat.id, f"🚀 Рассылка на {len(chats)} чатов...")
+    msg = safe_send(message.chat.id, f"🚀 Начинаю рассылку на {len(chats)} чатов...")
     
     for (chat_id,) in chats:
         try:
@@ -676,77 +623,12 @@ def cmd_broadcast(message):
         bot.edit_message_text(f"✅ Рассылка завершена.\nУспешно: {success}\nОшибок: {fail}",
                               chat_id=message.chat.id, message_id=msg.message_id)
 
-
-@bot.message_handler(commands=["do"], func=lambda m: m.chat.type == "private")
-def cmd_download_db(message):
-    if not is_admin(message.from_user.id): return
-    try:
-        with open(DB_NAME, "rb") as f:
-            bot.send_document(message.chat.id, f, caption="📦 Ваша база данных")
-    except Exception as e:
-        safe_send(message.chat.id, f"Ошибка: {e}")
-
-
-@bot.message_handler(commands=["deluser"], func=lambda m: m.chat.type == "private")
-def cmd_deluser(message):
-    if not is_admin(message.from_user.id): return
-    if not message.reply_to_message:
-        safe_send(message.chat.id, "Ответьте на сообщение пользователя, чтобы удалить его из базы.")
-        return
-        
-    target_id = message.reply_to_message.from_user.id
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("DELETE FROM users WHERE user_id = ?", (target_id,))
-        conn.commit()
-    safe_send(message.chat.id, f"✅ Пользователь {target_id} удален из базы.")
-
-
-@bot.message_handler(commands=["del"], func=lambda m: m.chat.type == "private")
-def cmd_del_all(message):
-    if not is_admin(message.from_user.id): return
-    
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("DELETE FROM users")
-        conn.execute("DELETE FROM chats")
-        conn.execute("DELETE FROM analytics")
-        conn.execute("DELETE FROM accusations")
-        conn.execute("DELETE FROM clown_of_day")
-        conn.commit()
-    safe_send(message.chat.id, "💥 Все базы данных полностью очищены!")
-
-
-@bot.message_handler(commands=["fixbugs"], func=lambda m: m.chat.type == "private")
-def cmd_fixbugs(message):
-    if not is_admin(message.from_user.id): return
-    
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("DELETE FROM accusations")
-        conn.commit()
-        
-    safe_send(message.chat.id, "🔧 Жуки перекачаны! Все зависшие суды и таймеры сброшены.")
-
-
-@bot.callback_query_handler(func=lambda call: call.data == "admin_stats")
-def admin_stats_callback(call):
-    if not is_admin(call.from_user.id): return
-    cmd_admin_stats(call.message)
-    bot.answer_callback_query(call.id)
-
-
-@bot.callback_query_handler(func=lambda call: call.data == "admin_graph")
-def admin_graph_callback(call):
-    if not is_admin(call.from_user.id): return
-    cmd_ex_7days(call.message)
-    bot.answer_callback_query(call.id)
-
-
 # ============================================================
-# ЗАПУСК + АВТОУСТАНОВКА МЕНЮ + УВЕДОМЛЕНИЕ
+# ЗАПУСК
 # ============================================================
 if __name__ == "__main__":
     print("Бот запущен!")
     
-    # --- АВТОМАТИЧЕСКАЯ УСТАНОВКА МЕНЮ КОМАНД ---
     try:
         commands = [
             types.BotCommand("golda", "💰 Забрать голду"),
@@ -759,10 +641,9 @@ if __name__ == "__main__":
             types.BotCommand("govno", "💩 Кинуть какашку (реплай)")
         ]
         bot.set_my_commands(commands)
-        print("Меню команд успешно обновлено!")
+        print("Меню команд обновлено!")
     except Exception as e:
-        print(f"Не удалось обновить меню команд: {e}")
-    # --------------------------------------------
+        print(f"Ошибка меню: {e}")
 
     try:
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -772,9 +653,9 @@ if __name__ == "__main__":
             f"━━━━━━━━━━━━━━━\n\n"
             f"🕒 Время: <b>{now_str}</b>\n\n"
             f"🟢 Статус: Онлайн\n\n"
-            f"⚙️ Версия: 8.0 (Mega Admin)",
+            f"⚙️ Версия: 11.0 (TXT Group List)",
         )
     except Exception as e:
-        print(f"Не удалось отправить уведомление админу: {e}")
+        print(f"Ошибка уведомления: {e}")
 
     bot.infinity_polling(timeout=30, long_polling_timeout=30)
