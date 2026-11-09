@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.types import InlineKeyboardButton, Message, ChatType
+from aiogram.types import InlineKeyboardButton, Message
 from aiogram.enums import ParseMode
 
 # --- НАСТРОЙКИ ---
@@ -87,15 +87,12 @@ CLOWN_TEMPLATES = [
 ]
 
 # --- ПРОВЕРКИ ---
-def is_group(message: Message) -> bool:
-    return message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]
-
 def is_admin(user_id: int) -> bool:
     return user_id == ADMIN_ID
 
 # --- КОМАНДЫ ИГРЫ (ТОЛЬКО ДЛЯ ГРУПП) ---
 
-@dp.message(Command("start"), F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP}))
+@dp.message(Command("start"), F.chat.type != "private")
 async def cmd_start(message: Message):
     register_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
     with sqlite3.connect(DB_NAME) as conn:
@@ -121,7 +118,7 @@ async def cmd_start(message: Message):
     )
     await message.answer(welcome_text, parse_mode=ParseMode.HTML)
 
-@dp.message(Command("help"), F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP}))
+@dp.message(Command("help"), F.chat.type != "private")
 async def cmd_help(message: Message):
     text = (
         "┏━━━━━━━━━━━━━━━┓\n"
@@ -139,7 +136,7 @@ async def cmd_help(message: Message):
     )
     await message.answer(text, parse_mode=ParseMode.HTML)
 
-@dp.message(Command("daily"), F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP}))
+@dp.message(Command("daily"), F.chat.type != "private")
 async def cmd_daily(message: Message):
     user = get_user(message.from_user.id)
     if not user:
@@ -158,7 +155,6 @@ async def cmd_daily(message: Message):
             await message.reply(f"⏳ **Кулдаун!**\nТы уже забирал голду. Приходи через **{minutes} мин.**")
             return
 
-    # Рандомное количество голды от 300 до 800
     earned_gold = random.randint(300, 800)
     
     with sqlite3.connect(DB_NAME) as conn:
@@ -176,7 +172,7 @@ async def cmd_daily(message: Message):
         f"━━━━━━━━━━━━━━━"
     )
 
-@dp.message(Command("gstats"), F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP}))
+@dp.message(Command("gstats"), F.chat.type != "private")
 async def cmd_gstats(message: Message):
     user = get_user(message.from_user.id)
     if not user:
@@ -206,7 +202,7 @@ async def cmd_gstats(message: Message):
     )
     await message.reply(text, parse_mode=ParseMode.MARKDOWN)
 
-@dp.message(Command("nation"), F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP}))
+@dp.message(Command("nation"), F.chat.type != "private")
 async def cmd_nation(message: Message):
     nation = random.choice(NATIONALITIES)
     add_analytics("nation")
@@ -218,7 +214,7 @@ async def cmd_nation(message: Message):
         f"*Результат может измениться в следующий раз.*"
     )
 
-@dp.message(Command("word"), F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP}))
+@dp.message(Command("word"), F.chat.type != "private")
 async def cmd_word(message: Message):
     word = random.choice(WORDS_OF_DAY)
     await message.reply(
@@ -228,7 +224,7 @@ async def cmd_word(message: Message):
         f"━━━━━━━━━━━━━━━"
     )
 
-@dp.message(Command("kloun"), F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP}))
+@dp.message(Command("kloun"), F.chat.type != "private")
 async def cmd_kloun(message: Message):
     today = datetime.now().strftime("%Y-%m-%d")
     with sqlite3.connect(DB_NAME) as conn:
@@ -265,7 +261,7 @@ async def cmd_kloun(message: Message):
         f"━━━━━━━━━━━━━━━"
     , parse_mode=ParseMode.MARKDOWN)
 
-@dp.message(Command("poo"), F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP}))
+@dp.message(Command("poo"), F.chat.type != "private")
 async def cmd_poo(message: Message):
     if not message.reply_to_message:
         await message.reply("🎯 Кинь какашку кому-то! Для этого ответь на сообщение жертвы командой /poo")
@@ -279,7 +275,7 @@ async def cmd_poo(message: Message):
     add_analytics("poo")
     await message.reply(f"💩 **АТАКА КАКАШКАМИ!**\n\n{text}", parse_mode=ParseMode.MARKDOWN)
 
-@dp.message(Command("stats"), F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP}))
+@dp.message(Command("stats"), F.chat.type != "private")
 async def cmd_stats(message: Message):
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
@@ -291,7 +287,6 @@ async def cmd_stats(message: Message):
     
     text = "🏆 **ТОП-10 БОГАЧЕЙ ЧАТА**\n━━━━━━━━━━━━━━━\n<pre>"
     for i, (name, gold) in enumerate(top_users, 1):
-        # Обрезаем имя, если оно слишком длинное, чтобы таблица не ломалась
         display_name = (name[:12] + '..') if len(name) > 12 else name
         text += f"{i:2}. {display_name:<14} | {gold:>6} 💰\n"
     text += "</pre>━━━━━━━━━━━━━━━"
@@ -301,7 +296,7 @@ async def cmd_stats(message: Message):
 
 # --- МЕХАНИКА ОБВИНЕНИЙ ---
 
-@dp.message(Command("accuse"), F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP}))
+@dp.message(Command("accuse"), F.chat.type != "private")
 async def cmd_accuse(message: Message):
     if not message.reply_to_message:
         await message.reply("⚖️ Чтобы обвинить кого-то, ответь на его сообщение командой /accuse")
@@ -402,7 +397,7 @@ async def process_vote(callback: types.CallbackQuery):
 
 # --- АДМИН ПАНЕЛЬ (ТОЛЬКО В ЛС) ---
 
-@dp.message(Command("admin"), F.chat.type == ChatType.PRIVATE)
+@dp.message(Command("admin"), F.chat.type == "private")
 async def cmd_admin(message: Message):
     if not is_admin(message.from_user.id):
         await message.answer("У вас нет доступа к этой команде.")
@@ -466,7 +461,7 @@ async def admin_graph(callback: types.CallbackQuery):
     await callback.message.answer(text, parse_mode=ParseMode.HTML)
     await callback.answer()
 
-@dp.message(Command("rass"), F.chat.type == ChatType.PRIVATE)
+@dp.message(Command("rass"), F.chat.type == "private")
 async def cmd_rass(message: Message):
     if not is_admin(message.from_user.id): return
     if not message.reply_to_message:
@@ -495,7 +490,6 @@ async def cmd_rass(message: Message):
 # --- ЗАПУСК И УВЕДОМЛЕНИЕ ---
 async def main():
     print("Бот запущен!")
-    # Отправка уведомления админу при старте
     try:
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         await bot.send_message(
@@ -504,7 +498,7 @@ async def main():
             f"━━━━━━━━━━━━━━━\n"
             f"🕒 Время: `{now_str}`\n"
             f"🟢 Статус: Онлайн\n"
-            f"⚙️ Версия: 2.0 (Красивая)",
+            f"⚙️ Версия: 2.1 (Fix)",
             parse_mode=ParseMode.MARKDOWN
         )
     except Exception as e:
