@@ -1,7 +1,7 @@
 # bot.py
 # Запуск: BOT_TOKEN=xxx python bot.py
 # Зависимости: pip install pyTelegramBotAPI
-# matplotlib ставится автоматически при старте (если есть права), иначе — ASCII-график
+# matplotlib ставится автоматически при старте (если есть права), иначе — текстовый вывод
 
 import os
 import sys
@@ -35,7 +35,7 @@ def _ensure_matplotlib():
             return True
         except Exception as e:
             print(f"[init] Не удалось установить matplotlib: {e}. "
-                  f"Будет использован ASCII-график.")
+                  f"Будет использован текстовый вывод.")
             return False
 
 HAS_MPL = _ensure_matplotlib()
@@ -44,7 +44,8 @@ if HAS_MPL:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from collections import Counter as _Counter
+    import matplotlib.dates as mdates
+    from matplotlib.lines import Line2D
 
 # ============================================================
 #  КОНФИГ
@@ -331,16 +332,6 @@ def humanize_minutes(sec):
 
 def today_str():
     return date.today().isoformat()
-
-def ascii_bar_chart(xs, ys, width=30):
-    if not xs:
-        return "Нет данных."
-    maxy = max(ys) or 1
-    lines = []
-    for x, y in zip(xs, ys):
-        bar = "█" * max(1, int(width * y / maxy))
-        lines.append(f"{x}: {bar} {y}")
-    return "\n".join(lines)
 
 # ============================================================
 #  КЭШ КОЛИЧЕСТВА УЧАСТНИКОВ ЧАТА
@@ -1001,44 +992,93 @@ def cmd_an(message):
 def cmd_ex(message):
     is_all = message.text.startswith("/exall")
     since = 0 if is_all else int(time.time()) - 7 * 86400
+
     with adb() as con:
-        rows = con.execute("SELECT ts FROM events WHERE ts>? ORDER BY ts",
-                           (since,)).fetchall()
-    if not rows:
-        bot.send_message(message.chat.id,
-                         "Нет данных за выбранный период.\n"
-                         "События пишутся при игровых действиях и обычных сообщениях.")
+        events_rows = con.execute("SELECT ts FROM events WHERE ts>? ORDER BY ts", (since,)).fetchall()
+        groups_ts = con.execute("SELECT added_at FROM groups WHERE added_at>?", (since,)).fetchall()
+
+    if not events_rows and not groups_ts:
+        bot.send_message(message.chat.id, "Нет данных за выбранный период.")
         return
 
     from collections import Counter
-    days = Counter(datetime.fromtimestamp(r["ts"]).strftime("%Y-%m-%d") for r in rows)
-    xs = sorted(days)
-    ys = [days[d] for d in xs]
+    events_counter = Counter(datetime.fromtimestamp(r["ts"]).strftime("%Y-%m-%d") for r in events_rows)
+    new_players_counter = Counter(datetime.fromtimestamp(r["added_at"]).strftime("%Y-%m-%d") for r in groups_ts)
+
+    all_dates_str = sorted(set(list(events_counter.keys()) + list(new_players_counter.keys())))
+    
+    if not all_dates_str:
+        bot.send_message(message.chat.id, "Нет данных за выбранный период.")
+        return
+
+    xs_dt = [datetime.strptime(d, "%Y-%m-%d") for d in all_dates_str]
+    ys_events = [events_counter.get(d, 0) for d in all_dates_str]
+    ys_new_players = [new_players_counter.get(d, 0) for d in all_dates_str]
 
     if HAS_MPL:
-        fig, ax = plt.subplots(figsize=(10, 5))
-        ax.plot(xs, ys, marker="o")
-        ax.set_title("Активность" + (" (всё время)" if is_all else " (7 дней)"))
-        ax.set_ylabel("Событий")
-        ax.tick_params(axis="x", rotation=45)
-        fig.tight_layout()
+        plt.style.use('default')
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+        fig.patch.set_facecolor('#ffffff')
+
+        # === ГРАФИК 1: Прирост (всего) — Столбчатая диаграмма ===
+        bars = ax1.bar(xs_dt, ys_new_players, width=0.6, color='#007bff', label='Новые игроки')
+        
+        title1 = "👤 Прирост (всё время)" if is_all else "👤 Прирост (7 дней)"
+        ax1.set_title(title1, fontsize=16, fontweight='bold', color='#555555', pad=15)
+        ax1.legend(loc='upper center', frameon=False, fontsize=12)
+        
+        ax1.spines['top'].set_visible(False)
+        ax1.spines['right'].set_visible(False)
+        ax1.spines['left'].set_visible(False)
+        ax1.spines['bottom'].set_color('#dddddd')
+        ax1.tick_params(axis='both', colors='#555555', labelsize=10)
+        ax1.grid(axis='y', color='#eeeeee', linestyle='-', linewidth=1)
+        ax1.set_axisbelow(True)
+        ax1.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
+        # === ГРАФИК 2: Нажатия (всего) — Линейный график с заливкой ===
+        line_color = '#28a745'
+        ax2.plot(xs_dt, ys_events, marker='o', color=line_color, linewidth=2, 
+                 markerfacecolor='white', markeredgewidth=2, markersize=6, label='Нажатий')
+        ax2.fill_between(xs_dt, ys_events, color=line_color, alpha=0.15)
+        
+        title2 = "⚙️ Нажатия (всё время)" if is_all else "⚙️ Нажатия (7 дней)"
+        ax2.set_title(title2, fontsize=16, fontweight='bold', color='#555555', pad=15)
+        
+        legend_elements = [Line2D([0], [0], color=line_color, lw=2, label='Нажатий')]
+        ax2.legend(handles=legend_elements, loc='upper center', frameon=False, fontsize=12)
+
+        ax2.spines['top'].set_visible(False)
+        ax2.spines['right'].set_visible(False)
+        ax2.spines['left'].set_visible(False)
+        ax2.spines['bottom'].set_color('#dddddd')
+        ax2.tick_params(axis='both', colors='#555555', labelsize=10)
+        ax2.grid(axis='y', color='#eeeeee', linestyle='-', linewidth=1)
+        ax2.set_axisbelow(True)
+        ax2.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
+        for ax in [ax1, ax2]:
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+            ax.xaxis.set_major_locator(mdates.DayLocator())
+            plt.setp(ax.get_xticklabels(), rotation=30, ha='right')
+
+        fig.tight_layout(pad=3.0)
+        
         buf = io.BytesIO()
-        fig.savefig(buf, format="png")
+        fig.savefig(buf, format="png", dpi=150, bbox_inches='tight')
         buf.seek(0)
         plt.close(fig)
         bot.send_photo(message.chat.id, buf)
         return
 
-    chart = ascii_bar_chart(xs, ys)
-    header = ("📊 <b>Активность</b>"
-              + (" (всё время)" if is_all else " (7 дней)"))
-    footer = ("\n\n<i>Совет: установи matplotlib в тот же venv, где запущен бот, "
-              "чтобы получать PNG-графики: pip install matplotlib</i>")
-    body = chart
-    max_len = 3500
-    if len(body) > max_len:
-        body = "…(начало обрезано)\n" + body[-max_len:]
-    bot.send_message(message.chat.id, header + "\n\n<pre>" + body + "</pre>" + footer)
+    text = "📊 <b>Статистика (текст)</b>\n\n"
+    text += "<b>Прирост:</b>\n"
+    for d, c in zip(all_dates_str, ys_new_players):
+        text += f"  {d}: {c}\n"
+    text += "\n<b>Нажатия:</b>\n"
+    for d, c in zip(all_dates_str, ys_events):
+        text += f"  {d}: {c}\n"
+    bot.send_message(message.chat.id, text)
 
 
 # ============================================================
@@ -1067,6 +1107,6 @@ if __name__ == "__main__":
     init_dbs()
     register_commands()
     print(f"[init] python={sys.executable}")
-    print(f"[init] matplotlib={'OK' if HAS_MPL else 'НЕ УСТАНОВЛЕН (ASCII-график)'}")
+    print(f"[init] matplotlib={'OK' if HAS_MPL else 'НЕ УСТАНОВЛЕН (текстовый вывод)'}")
     print("Бот запущен...")
     bot.infinity_polling(skip_pending=True, timeout=30)
