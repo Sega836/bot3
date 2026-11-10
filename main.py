@@ -1,6 +1,7 @@
 # bot.py
 # Запуск: BOT_TOKEN=xxx python bot.py
-# Зависимости: pip install pyTelegramBotAPI matplotlib
+# Зависимости: pip install pyTelegramBotAPI
+# Опционально: pip install matplotlib  (для графиков; без него — ASCII-график)
 
 import os
 import io
@@ -28,6 +29,16 @@ ANALYTICS_DB = "analytics.db"
 GOLDA_COOLDOWN = 3600
 KAZIK_TIMEOUT = 120
 COURT_DURATION = 60
+
+# Пробуем импортировать matplotlib один раз при старте
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from collections import Counter as _Counter
+    HAS_MPL = True
+except Exception:
+    HAS_MPL = False
 
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 
@@ -300,6 +311,17 @@ def humanize_minutes(sec):
 def today_str():
     return date.today().isoformat()
 
+def ascii_bar_chart(xs, ys, width=30):
+    """ASCII-фолбэк, если matplotlib недоступен."""
+    if not xs:
+        return "Нет данных."
+    maxy = max(ys) or 1
+    lines = []
+    for x, y in zip(xs, ys):
+        bar = "█" * max(1, int(width * y / maxy))
+        lines.append(f"{x}: {bar} {y}")
+    return "\n".join(lines)
+
 # ============================================================
 #  РЕГИСТРАЦИЯ КОМАНД
 # ============================================================
@@ -322,6 +344,32 @@ GAME_COMMANDS = [
 def register_commands():
     cmds = [types.BotCommand(c, d) for c, d in GAME_COMMANDS]
     bot.set_my_commands(cmds)
+
+# ============================================================
+#  ДОБАВЛЕНИЕ БОТА В ГРУППУ / УДАЛЕНИЕ  (работает даже в privacy mode)
+# ============================================================
+@bot.my_chat_member_handler()
+def on_my_chat_member(upd: types.ChatMemberUpdated):
+    chat = upd.chat
+    if chat.type not in ("group", "supergroup"):
+        return
+    status = upd.new_chat_member.status
+    if status in ("member", "administrator", "creator"):
+        track_group(chat.id, chat.title or str(chat.id))
+        # сразу пытаемся поприветствовать, если стали админом/добавили
+        try:
+            kb = types.InlineKeyboardMarkup()
+            kb.add(types.InlineKeyboardButton("➕ Добавить в группу", url=GROUP_URL))
+            bot.send_message(chat.id,
+                             "👋 Привет, группа!\n\n"
+                             "Я — игровой бот «Шутки за 200». "
+                             "Введи /help, чтобы посмотреть команды.",
+                             reply_markup=kb)
+        except Exception:
+            pass
+    elif status in ("left", "kicked"):
+        # можно пометить как неактивную, но оставим для истории
+        pass
 
 # ============================================================
 #  /start  и  /help
@@ -389,24 +437,54 @@ def cmd_golda(message):
                           f"Следующий сбор доступен через 1 час.")
 
 # ============================================================
-#  /stats  (топ чата — только группы)
+#  /stats  — универсальный:
+#    • в ЛС + админ  → полная аналитика
+#    • в группе      → топ-10 чата
 # ============================================================
 @bot.message_handler(commands=["stats"])
 def cmd_stats(message):
-    if not is_group(message):
-        # в ЛС подсказываем админский вариант
-        if message.from_user.id == ADMIN_ID:
-            bot.reply_to(message, "👑 Админ-статистика: /astats")
+    if is_private(message):
+        if message.from_user.id != ADMIN_ID:
+            return
+        # ---------- АДМИН-СТАТИСТИКА ----------
+        now = int(time.time())
+        week_ago = now - 7 * 86400
+        with adb() as con:
+            groups_total = con.execute("SELECT COUNT(*) c FROM groups").fetchone()["c"]
+            users_total = con.execute(
+                "SELECT COUNT(DISTINCT user_id) c FROM events").fetchone()["c"]
+            records = con.execute("SELECT COUNT(*) c FROM events").fetchone()["c"]
+            week = con.execute(
+                "SELECT COUNT(*) c FROM events WHERE ts>?", (week_ago,)).fetchone()["c"]
+        with gdb() as con:
+            players = con.execute(
+                "SELECT COUNT(DISTINCT user_id) c FROM players").fetchone()["c"]
+        text = ("📈 <b>ПОЛНАЯ СТАТИСТИКА БОТА</b>\n\n"
+                f"👥 Охват аудитории:\n"
+                f"• Людей в группах (игроки): {players}\n"
+                f"• Всего активных групп: {groups_total}\n"
+                f"• Групп с ошибкой доступа: 0\n\n"
+                f"🎮 Вовлечённость:\n"
+                f"• Уникальных игроков (всего): {users_total}\n"
+                f"• Всего записей в базе: {records}\n\n"
+                f"🐞 Игровой процесс:\n"
+                f"• Всего нажатий: {records}\n"
+                f"• Нажатий за 7 дней: {week}\n\n"
+                f"ℹ️ Дополнительно: /groups /globaltop /fullreport /ex /exall /debug")
+        bot.send_message(message.chat.id, text)
         return
-    rows = top_players(message.chat.id, 10)
-    if not rows:
-        bot.reply_to(message, "🏆 Пока нет игроков с голдой. Начни с /golda!")
-        return
-    lines = ["🏆 <b>ТОП-10 БОГАЧЕЙ ЧАТА</b>\n"]
-    for i, r in enumerate(rows, 1):
-        lines.append(f"{i}. {r['first_name']} — {r['gold']} 💰")
-    bot.reply_to(message, "\n".join(lines))
-    track_event(message.chat.id, message.from_user.id, "stats")
+
+    if is_group(message):
+        # ---------- ТОП ЧАТА ----------
+        rows = top_players(message.chat.id, 10)
+        if not rows:
+            bot.reply_to(message, "🏆 Пока нет игроков с голдой. Начни с /golda!")
+            return
+        lines = ["🏆 <b>ТОП-10 БОГАЧЕЙ ЧАТА</b>\n"]
+        for i, r in enumerate(rows, 1):
+            lines.append(f"{i}. {r['first_name']} — {r['gold']} 💰")
+        bot.reply_to(message, "\n".join(lines))
+        track_event(message.chat.id, message.from_user.id, "stats")
 
 # ============================================================
 #  /gstats
@@ -469,7 +547,7 @@ def cmd_govno(message):
     track_event(message.chat.id, message.from_user.id, "govno")
 
 # ============================================================
-#  /obvinit  — суд с голосованием
+#  /obvinit
 # ============================================================
 @bot.message_handler(commands=["obvinit"])
 def cmd_obvinit(message):
@@ -583,7 +661,7 @@ def cmd_kloun(message):
                           f"📌 Причина: {reason}")
 
 # ============================================================
-#  /kazik  — интерактивная игра в 3 шага
+#  /kazik
 # ============================================================
 @bot.message_handler(commands=["kazik"])
 def cmd_kazik(message):
@@ -705,7 +783,7 @@ def cmd_marry(message):
                           f"Горько! 🥂")
 
 # ============================================================
-#  АДМИН-КОМАНДЫ (только ЛС, только ADMIN_ID)
+#  АДМИН-КОМАНДЫ
 # ============================================================
 def admin_only(func):
     def wrapper(message, *args, **kwargs):
@@ -722,7 +800,7 @@ def admin_only(func):
 def cmd_adminhelp(message):
     text = ("👑 <b>Команды администратора</b>\n\n"
             "📊 Аналитика:\n"
-            "• /astats — Подробная статистика\n"
+            "• /stats — Подробная статистика (в ЛС)\n"
             "• /fullreport — Выгрузить ВСЮ аналитику в TXT\n"
             "• /ex — Графики за 7 дней\n"
             "• /exall — Графики за всё время\n"
@@ -735,32 +813,6 @@ def cmd_adminhelp(message):
     bot.send_message(message.chat.id, text)
 
 
-@bot.message_handler(commands=["astats"])
-@admin_only
-def cmd_admin_stats(message):
-    now = int(time.time())
-    week_ago = now - 7 * 86400
-    with adb() as con:
-        groups_total = con.execute("SELECT COUNT(*) c FROM groups").fetchone()["c"]
-        users_total = con.execute("SELECT COUNT(DISTINCT user_id) c FROM events").fetchone()["c"]
-        records = con.execute("SELECT COUNT(*) c FROM events").fetchone()["c"]
-        week = con.execute("SELECT COUNT(*) c FROM events WHERE ts>?", (week_ago,)).fetchone()["c"]
-    with gdb() as con:
-        players = con.execute("SELECT COUNT(DISTINCT user_id) c FROM players").fetchone()["c"]
-    text = ("📈 <b>ПОЛНАЯ СТАТИСТИКА БОТА</b>\n\n"
-            f"👥 Охват аудитории:\n"
-            f"• Людей в группах (игроки): {players}\n"
-            f"• Всего активных групп: {groups_total}\n"
-            f"• Групп с ошибкой доступа: 0\n\n"
-            f"🎮 Вовлечённость:\n"
-            f"• Уникальных игроков (всего): {users_total}\n"
-            f"• Всего записей в базе: {records}\n\n"
-            f"🐞 Игровой процесс:\n"
-            f"• Всего нажатий: {records}\n"
-            f"• Нажатий за 7 дней: {week}")
-    bot.send_message(message.chat.id, text)
-
-
 @bot.message_handler(commands=["fullreport"])
 @admin_only
 def cmd_fullreport(message):
@@ -769,7 +821,14 @@ def cmd_fullreport(message):
         groups = con.execute("SELECT * FROM groups ORDER BY added_at").fetchall()
         lines.append(f"Всего групп: {len(groups)}\n")
         for g in groups:
-            lines.append(f"• {g['title']} (id={g['chat_id']})")
+            # Подтягиваем актуальное название из API, если в БД нет
+            title = g["title"] or "?"
+            try:
+                chat = bot.get_chat(g["chat_id"])
+                title = chat.title or title
+            except Exception:
+                pass
+            lines.append(f"• {title} (id={g['chat_id']})")
             with gdb() as gcon:
                 ps = gcon.execute(
                     "SELECT user_id, first_name, username, gold FROM players WHERE chat_id=?",
@@ -792,11 +851,20 @@ def cmd_groups(message):
     with adb() as con:
         groups = con.execute("SELECT * FROM groups ORDER BY added_at").fetchall()
     if not groups:
-        bot.send_message(message.chat.id, "Групп пока нет.")
+        bot.send_message(message.chat.id,
+                         "Групп пока нет.\n"
+                         "Добавь бота в группу — он сразу отреагирует на событие "
+                         "my_chat_member и запишется в БД.")
         return
     lines = ["📋 <b>Группы из базы:</b>"]
     for g in groups:
-        lines.append(f"• {g['title']} — <code>{g['chat_id']}</code>")
+        title = g["title"] or "?"
+        try:
+            chat = bot.get_chat(g["chat_id"])
+            title = chat.title or title
+        except Exception:
+            title += " (нет доступа)"
+        lines.append(f"• {title} — <code>{g['chat_id']}</code>")
     bot.send_message(message.chat.id, "\n".join(lines))
 
 
@@ -819,7 +887,6 @@ def cmd_globaltop(message):
 @admin_only
 def cmd_debug(message):
     with adb() as con:
-        g = con.execute("SELECT COUNT(*) c FROM groups").fetchone()["c"]
         e = con.execute("SELECT COUNT(*) c FROM events").fetchone()["c"]
         recent = con.execute("SELECT * FROM events ORDER BY ts DESC LIMIT 10").fetchall()
         glist = con.execute("SELECT chat_id, title FROM groups").fetchall()
@@ -827,9 +894,17 @@ def cmd_debug(message):
         p = con.execute("SELECT COUNT(*) c FROM players").fetchone()["c"]
         sample = con.execute(
             "SELECT chat_id, user_id, first_name, gold FROM players LIMIT 10").fetchall()
-    parts = [f"groups={g}, events={e}, players={p}", "", "Группы:"]
+
+    parts = [f"groups={len(glist)}, events={e}, players={p}",
+             f"matplotlib={'OK' if HAS_MPL else 'НЕ УСТАНОВЛЕН'}", "", "Группы:"]
     for r in glist:
-        parts.append(f"  {r['chat_id']} — {r['title']}")
+        title = r["title"] or "?"
+        try:
+            chat = bot.get_chat(r["chat_id"])
+            title = chat.title or title
+        except Exception:
+            title += " (нет доступа)"
+        parts.append(f"  {r['chat_id']} — {title}")
     parts.append("")
     parts.append("Последние события:")
     for r in recent:
@@ -874,19 +949,10 @@ def cmd_an(message):
 @bot.message_handler(commands=["ex", "exall"])
 @admin_only
 def cmd_ex(message):
-    try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-        from collections import Counter
-    except ImportError:
-        bot.send_message(message.chat.id, "matplotlib не установлен.")
-        return
-
     is_all = message.text.startswith("/exall")
     since = 0 if is_all else int(time.time()) - 7 * 86400
     with adb() as con:
-        rows = con.execute("SELECT ts, event FROM events WHERE ts>? ORDER BY ts",
+        rows = con.execute("SELECT ts FROM events WHERE ts>? ORDER BY ts",
                            (since,)).fetchall()
     if not rows:
         bot.send_message(message.chat.id,
@@ -894,28 +960,43 @@ def cmd_ex(message):
                          "События пишутся при игровых действиях и обычных сообщениях.")
         return
 
+    from collections import Counter
     days = Counter(datetime.fromtimestamp(r["ts"]).strftime("%Y-%m-%d") for r in rows)
     xs = sorted(days)
     ys = [days[d] for d in xs]
 
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(xs, ys, marker="o")
-    ax.set_title("Активность" + (" (всё время)" if is_all else " (7 дней)"))
-    ax.set_ylabel("Событий")
-    ax.tick_params(axis="x", rotation=45)
-    fig.tight_layout()
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png")
-    buf.seek(0)
-    plt.close(fig)
-    bot.send_photo(message.chat.id, buf)
+    # ---- matplotlib есть → PNG ----
+    if HAS_MPL:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.plot(xs, ys, marker="o")
+        ax.set_title("Активность" + (" (всё время)" if is_all else " (7 дней)"))
+        ax.set_ylabel("Событий")
+        ax.tick_params(axis="x", rotation=45)
+        fig.tight_layout()
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png")
+        buf.seek(0)
+        plt.close(fig)
+        bot.send_photo(message.chat.id, buf)
+        return
+
+    # ---- matplotlib нет → ASCII-фолбэк ----
+    chart = ascii_bar_chart(xs, ys)
+    header = ("📊 <b>Активность</b>"
+              + (" (всё время)" if is_all else " (7 дней)"))
+    footer = ("\n\n<i>Совет: установи matplotlib в тот же venv, где запущен бот, "
+              "чтобы получать PNG-графики: pip install matplotlib</i>")
+    # Telegram лимит 4096 символов
+    body = chart
+    max_len = 3500
+    if len(body) > max_len:
+        body = body[-max_len:]
+        body = "…(начало обрезано)\n" + body
+    bot.send_message(message.chat.id, header + "\n\n<pre>" + body + "</pre>" + footer)
 
 
 # ============================================================
-#  ФОНОВЫЙ ТРЕКИНГ ГРУПП / ИГРОКОВ / СООБЩЕНИЙ
-#  ВАЖНО: регистрируется ПОСЛЕ всех командных хэндлеров,
-#  поэтому команды обрабатываются своими хэндлерами,
-#  а сюда попадают только не-команды.
+#  ФОНОВЫЙ ТРЕКИНГ
 # ============================================================
 @bot.message_handler(func=lambda m: True,
                      content_types=["text", "photo", "sticker", "video",
@@ -926,7 +1007,6 @@ def track_all(message):
     track_group(message.chat.id, message.chat.title or str(message.chat.id))
     ensure_player(message.chat.id, message.from_user.id,
                   message.from_user.username, message.from_user.first_name)
-    # команды уже залогированы своими хэндлерами
     if message.content_type == "text" and (message.text or "").startswith("/"):
         return
     track_event(message.chat.id, message.from_user.id, "message")
@@ -940,5 +1020,5 @@ if __name__ == "__main__":
         raise SystemExit("Не задан BOT_TOKEN")
     init_dbs()
     register_commands()
-    print("Бот запущен...")
+    print(f"Бот запущен... matplotlib={'OK' if HAS_MPL else 'НЕ УСТАНОВЛЕН (будет ASCII-график)'}")
     bot.infinity_polling(skip_pending=True, timeout=30)
