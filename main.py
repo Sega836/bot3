@@ -1,8 +1,4 @@
 # bot.py
-# Запуск: BOT_TOKEN=xxx python bot.py
-# Зависимости: pip install pyTelegramBotAPI
-# matplotlib ставится автоматически при старте (если есть права), иначе — текстовый вывод
-
 import os
 import sys
 import time
@@ -55,8 +51,10 @@ ADMIN_ID = 6597229121
 BOT_USERNAME = "Shutki_za_200_bot"
 GROUP_URL = f"https://t.me/{BOT_USERNAME}?startgroup=true"
 
-GAME_DB = "game.db"
-ANALYTICS_DB = "analytics.db"
+# Жестко привязываем БД к папке со скриптом
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+GAME_DB = os.path.join(BASE_DIR, "game.db")
+ANALYTICS_DB = os.path.join(BASE_DIR, "analytics.db")
 
 GOLDA_COOLDOWN = 3600
 KAZIK_TIMEOUT = 120
@@ -68,75 +66,49 @@ bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 #  ДАННЫЕ
 # ============================================================
 NATIONALITIES = [
-    "Русский", "Украинец", "Белорус", "Казах", "Татарин",
-    "Чеченец", "Узбек", "Армянин", "Грузин", "Азербайджанец",
-    "Киргиз", "Таджик", "Молдаванин", "Литвин", "Латыш",
-    "Эстонец", "Финн", "Швед", "Норвежец", "Датчанин",
-    "Немец", "Француз", "Итальянец", "Испанец", "Португалец",
-    "Британец", "Ирландец", "Шотландец", "Поляк", "Чех",
-    "Словак", "Венгр", "Румын", "Болгарин", "Серб",
-    "Хорват", "Грек", "Турок", "Израильтянин", "Египтянин",
-    "Американец", "Канадец", "Мексиканец", "Бразилец", "Аргентинец",
-    "Кубинец", "Китаец", "Японец", "Кореец", "Индиец",
-    "Тайец", "Вьетнамец", "Австралиец", "Новозеландец", "Марсианин 👽",
-    "Эльф 🧝", "Гном 🧔", "Пират 🏴‍☠️", "Самурай ⛩️", "Ковбой 🤠",
-    "Гоблин 👺",
+    "Русский", "Украинец", "Белорус", "Казах", "Татарин", "Чеченец", "Узбек", "Армянин", "Грузин", "Азербайджанец",
+    "Киргиз", "Таджик", "Молдаванин", "Литвин", "Латыш", "Эстонец", "Финн", "Швед", "Норвежец", "Датчанин",
+    "Немец", "Француз", "Итальянец", "Испанец", "Португалец", "Британец", "Ирландец", "Шотландец", "Поляк", "Чех",
+    "Словак", "Венгр", "Румын", "Болгарин", "Серб", "Хорват", "Грек", "Турок", "Израильтянин", "Египтянин",
+    "Американец", "Канадец", "Мексиканец", "Бразилец", "Аргентинец", "Кубинец", "Китаец", "Японец", "Кореец", "Индиец",
+    "Тайец", "Вьетнамец", "Австралиец", "Новозеландец", "Марсианин 👽", "Эльф 🧝", "Гном 🧔", "Пират 🏴‍☠️", "Самурай ⛩️", "Ковбой 🤠", "Гоблин 👺"
 ]
 
 WORDS_OF_DAY = [
-    "Кринж 😬", "Базед 🗿", "Скибиди 🚽", "Вайб ✨", "Ауф 🐺",
-    "Рофл 😂", "Шейминг 👎", "Краш 😍", "Слэй 💅", "Чилл 🛋️",
-    "Буллинг 🥊", "Гоуст 👻", "Сигма 🗿", "Альфа 🐺", "Бета 🐑",
-    "Омега 🐜", "Кек 🍞", "Лол 🤣", "Ору 🗣️", "Топчик 🔥",
-    "Зашквар 🚫", "Кринж-мастер 😬", "Мемас 🐸", "Вайб-чек ✨",
-    "Скибиди-туалет 🚽", "Сас 🕵️", "Амогус 📮", "Сас-сигма 🗿",
-    "Шипперить 💘", "Краш-культура 💔", "Слэй-квин 👑", "Герл-босс 💼",
-    "Флекс 💪", "Йоу-йоу 🎤", "Бро 🫂", "Систер 👯",
-    "Дота-бояр 🎮", "Майнкрафтер ⛏️", "Тиктокер 📱", "Стример 🎥",
-    "Геймер 🕹️", "Нуб 🐣", "Про 🏆", "Керри ⚔️", "Саппорт 🛡️",
-    "Мид 🏹", "Оффлейн 🪓", "Хардлейн 🧱", "Фид 😢", "Рампейдж 🔥",
-    "Кринж-стрим 📺", "Летсплей 🎬", "Спидран ⏱️",
-    "Тильт 😤", "Бомбит 💣", "Агрессивный чилл 😤🛋️", "Депресняк 😢",
-    "Эйфория 🤩", "Меланхолия 🌧️", "Нирвана 🧘", "Дзен 🧘‍♂️",
-    "Паника 😱", "Ступор 🥶", "Апатия 😑", "Хайп 🔥",
-    "Бумер 👴", "Зумер 🧢", "Миллениал 💼", "Альфа-поколение 👶",
-    "Бумер-стайл 👴🕶️", "Зумер-сленг 🧢🗣️", "Тикток-челлендж 📱",
-    "Кринжово 😬", "Скибиди-доп-доп 🚽🎵", "Сигма-мейл 🗿♂️",
-    "Ауф-ауф 🐺🐺", "Вайб-чек ✨✅", "Рофл-мастер 😂🏆",
-    "Кек-лол 🍞🤣", "Топ-топ 🔥🔥", "Зашквар-шоу 🚫📺",
-    "Мем-лорд 🐸👑", "Кринж-фест 😬🎪", "Вайб-кризис ✨😰",
+    "Кринж 😬", "Базед 🗿", "Скибиди 🚽", "Вайб ✨", "Ауф 🐺", "Рофл 😂", "Шейминг 👎", "Краш 😍", "Слэй 💅", "Чилл 🛋️",
+    "Буллинг 🥊", "Гоуст 👻", "Сигма 🗿", "Альфа 🐺", "Бета 🐑", "Омега 🐜", "Кек 🍞", "Лол 🤣", "Ору 🗣️", "Топчик 🔥",
+    "Зашквар 🚫", "Кринж-мастер 😬", "Мемас 🐸", "Вайб-чек ✨", "Скибиди-туалет 🚽", "Сас 🕵️", "Амогус 📮", "Сас-сигма 🗿",
+    "Шипперить 💘", "Краш-культура 💔", "Слэй-квин 👑", "Герл-босс 💼", "Флекс 💪", "Йоу-йоу 🎤", "Бро 🫂", "Систер 👯",
+    "Дота-бояр 🎮", "Майнкрафтер ⛏️", "Тиктокер 📱", "Стример 🎥", "Геймер 🕹️", "Нуб 🐣", "Про 🏆", "Керри ⚔️", "Саппорт 🛡️",
+    "Мид 🏹", "Оффлейн 🪓", "Хардлейн 🧱", "Фид 😢", "Рампейдж 🔥", "Кринж-стрим 📺", "Летсплей 🎬", "Спидран ⏱️",
+    "Тильт 😤", "Бомбит 💣", "Агрессивный чилл 😤🛋️", "Депресняк 😢", "Эйфория 🤩", "Меланхолия 🌧️", "Нирвана 🧘", "Дзен 🧘‍♂️",
+    "Паника 😱", "Ступор 🥶", "Апатия 😑", "Хайп 🔥", "Бумер 👴", "Зумер 🧢", "Миллениал 💼", "Альфа-поколение 👶",
+    "Бумер-стайл 👴🕶️", "Зумер-сленг 🧢🗣️", "Тикток-челлендж 📱", "Кринжово 😬", "Скибиди-доп-доп 🚽🎵", "Сигма-мейл 🗿♂️",
+    "Ауф-ауф 🐺🐺", "Вайб-чек ✨✅", "Рофл-мастер 😂🏆", "Кек-лол 🍞🤣", "Топ-топ 🔥🔥", "Зашквар-шоу 🚫📺", "Мем-лорд 🐸👑", "Кринж-фест 😬🎪", "Вайб-кризис ✨😰"
 ]
 
 CLOWN_REASONS = [
-    "пытался доказать, что Скибиди-туалет — это высшая форма искусства",
-    "скинул в чат видео с какашкой и назвал его 'мемом года'",
-    "написал 'я сигма', но испугался Скибиди-туалета в зеркале",
-    "съел шаурму с майонезом в 4 утра и назвал это 'завтраком'",
-    "попытался смыть Скибиди-туалет, но он оказался сильнее",
-    "прислал голосовое со звуком смыва на 3 минуты",
-    "сказал, что какашки — это новый тренд, и обиделся, когда все засмеялись",
-    "нарисовал Скибиди-туалет на уроке и получил двойку",
-    "назвал свой ник 'Какашка_В_Туалете' и удивился реакции",
-    "поспорил с ботом, что Скибиди-туалет существует, и проиграл",
-    "скинул стикер с какашкой 20 раз подряд",
-    "сказал 'я не Скибиди-туалет', но все уже поняли",
-    "попытался флиртовать с Скибиди-туалетом в чате",
-    "написал 'я умный', а потом спросил, что такое 'какашка'",
-    "поздравил Скибиди-туалет с днём рождения",
+    "пытался доказать, что Скибиди-туалет — это высшая форма искусства", "скинул в чат видео с какашкой и назвал его 'мемом года'",
+    "написал 'я сигма', но испугался Скибиди-туалета в зеркале", "съел шаурму с майонезом в 4 утра и назвал это 'завтраком'",
+    "попытался смыть Скибиди-туалет, но он оказался сильнее", "прислал голосовое со звуком смыва на 3 минуты",
+    "сказал, что какашки — это новый тренд, и обиделся, когда все засмеялись", "нарисовал Скибиди-туалет на уроке и получил двойку",
+    "назвал свой ник 'Какашка_В_Туалете' и удивился реакции", "поспорил с ботом, что Скибиди-туалет существует, и проиграл",
+    "скинул стикер с какашкой 20 раз подряд", "сказал 'я не Скибиди-туалет', но все уже поняли",
+    "попытался флиртовать с Скибиди-туалетом в чате", "написал 'я умный', а потом спросил, что такое 'какашка'",
+    "поздравил Скибиди-туалет с днём рождения"
 ]
 
 ACCUSATION_TEMPLATES = [
-    "{} кушал каки {}", "{} невероятно возбудился от {}", "{} украл трусы {}",
-    "{} признался в любви {}", "{} подглядывал за {} в душе",
-    "{} пукнул в сторону {}", "{} тайно влюблён в {}",
-    "{} съел последнюю печеньку {}", "{} назвал {} лохом",
+    "{} кушал каки {}", "{} невероятно возбудился от {}", "{} украл трусы {}", "{} признался в любви {}",
+    "{} подглядывал за {} в душе", "{} пукнул в сторону {}", "{} тайно влюблён в {}",
+    "{} съел последнюю печеньку {}", "{} назвал {} лохом"
 ]
 
 GOVNO_TEMPLATES = [
     "💩 {a} кинул какашку в {b}! Прямое попадание в лицо! 💩",
     "💩🚀 {a} запустил снаряд из какашек в {b}!",
     "💩 {a} незаметно подложил какашку в карман {b} 💩",
-    "💩 {a} обмазал {b} с ног до головы какашками!",
+    "💩 {a} обмазал {b} с ног до головы какашками!"
 ]
 
 # ============================================================
@@ -191,7 +163,6 @@ def adb():
     finally:
         con.close()
 
-# ---------- analytics ----------
 def track_group(chat_id, title):
     now = int(time.time())
     with adb() as con:
@@ -206,7 +177,6 @@ def track_event(chat_id, user_id, event):
         con.execute("INSERT INTO events (chat_id, user_id, event, ts) VALUES (?, ?, ?, ?)",
                     (chat_id, user_id, event, int(time.time())))
 
-# ---------- players ----------
 def ensure_player(chat_id, user_id, username, first_name):
     with gdb() as con:
         con.execute("""INSERT INTO players (chat_id, user_id, username, first_name)
@@ -217,40 +187,32 @@ def ensure_player(chat_id, user_id, username, first_name):
 
 def get_player(chat_id, user_id):
     with gdb() as con:
-        return con.execute("SELECT * FROM players WHERE chat_id=? AND user_id=?",
-                           (chat_id, user_id)).fetchone()
+        return con.execute("SELECT * FROM players WHERE chat_id=? AND user_id=?", (chat_id, user_id)).fetchone()
 
 def add_gold(chat_id, user_id, amount):
     with gdb() as con:
-        con.execute("UPDATE players SET gold=gold+? WHERE chat_id=? AND user_id=?",
-                    (amount, chat_id, user_id))
+        con.execute("UPDATE players SET gold=gold+? WHERE chat_id=? AND user_id=?", (amount, chat_id, user_id))
 
 def set_last_gold(chat_id, user_id, ts):
     with gdb() as con:
-        con.execute("UPDATE players SET last_gold=? WHERE chat_id=? AND user_id=?",
-                    (ts, chat_id, user_id))
+        con.execute("UPDATE players SET last_gold=? WHERE chat_id=? AND user_id=?", (ts, chat_id, user_id))
 
 def take_gold(chat_id, user_id, amount):
     with gdb() as con:
-        row = con.execute("SELECT gold FROM players WHERE chat_id=? AND user_id=?",
-                          (chat_id, user_id)).fetchone()
+        row = con.execute("SELECT gold FROM players WHERE chat_id=? AND user_id=?", (chat_id, user_id)).fetchone()
         if not row: return 0
         taken = min(row["gold"], amount)
-        con.execute("UPDATE players SET gold=gold-? WHERE chat_id=? AND user_id=?",
-                    (taken, chat_id, user_id))
+        con.execute("UPDATE players SET gold=gold-? WHERE chat_id=? AND user_id=?", (taken, chat_id, user_id))
         return taken
 
 def top_players(chat_id, limit=10):
     with gdb() as con:
-        return con.execute("SELECT first_name, gold FROM players WHERE chat_id=? AND gold>0 "
-                           "ORDER BY gold DESC LIMIT ?", (chat_id, limit)).fetchall()
+        return con.execute("SELECT first_name, gold FROM players WHERE chat_id=? AND gold>0 ORDER BY gold DESC LIMIT ?", (chat_id, limit)).fetchall()
 
 def chat_players(chat_id):
     with gdb() as con:
-        return con.execute("SELECT user_id, first_name FROM players WHERE chat_id=?",
-                           (chat_id,)).fetchall()
+        return con.execute("SELECT user_id, first_name FROM players WHERE chat_id=?", (chat_id,)).fetchall()
 
-# ---------- clown ----------
 def get_clown(chat_id):
     with gdb() as con:
         return con.execute("SELECT * FROM clowns WHERE chat_id=?", (chat_id,)).fetchone()
@@ -261,59 +223,46 @@ def set_clown(chat_id, user_id, name, reason, day):
                        VALUES (?, ?, ?, ?, ?)
                        ON CONFLICT(chat_id) DO UPDATE SET
                          user_id=excluded.user_id, name=excluded.name,
-                         reason=excluded.reason, day=excluded.day""",
-                    (chat_id, user_id, name, reason, day))
+                         reason=excluded.reason, day=excluded.day""", (chat_id, user_id, name, reason, day))
 
-# ---------- pet/marry ----------
 def set_pet(chat_id, user_id, pet_id, pet_name, ts):
     with gdb() as con:
-        con.execute("UPDATE players SET pet_id=?, pet_name=?, last_pet=? "
-                    "WHERE chat_id=? AND user_id=?",
-                    (pet_id, pet_name, ts, chat_id, user_id))
+        con.execute("UPDATE players SET pet_id=?, pet_name=?, last_pet=? WHERE chat_id=? AND user_id=?", (pet_id, pet_name, ts, chat_id, user_id))
 
 def marry(chat_id, user_id, partner_id):
     with gdb() as con:
-        con.execute("UPDATE players SET marry_id=? WHERE chat_id=? AND user_id=?",
-                    (partner_id, chat_id, user_id))
-        con.execute("UPDATE players SET marry_id=? WHERE chat_id=? AND user_id=?",
-                    (user_id, chat_id, partner_id))
+        con.execute("UPDATE players SET marry_id=? WHERE chat_id=? AND user_id=?", (partner_id, chat_id, user_id))
+        con.execute("UPDATE players SET marry_id=? WHERE chat_id=? AND user_id=?", (user_id, chat_id, partner_id))
 
-# ---------- court ----------
 def court_vote(court_id, user_id, vote):
     with gdb() as con:
         con.execute("""INSERT INTO court_votes (court_id, user_id, vote) VALUES (?, ?, ?)
-                       ON CONFLICT(court_id, user_id) DO UPDATE SET vote=excluded.vote""",
-                    (court_id, user_id, vote))
+                       ON CONFLICT(court_id, user_id) DO UPDATE SET vote=excluded.vote""", (court_id, user_id, vote))
 
 def court_tally(court_id):
     with gdb() as con:
-        rows = con.execute("SELECT vote, COUNT(*) c FROM court_votes WHERE court_id=? "
-                           "GROUP BY vote", (court_id,)).fetchall()
+        rows = con.execute("SELECT vote, COUNT(*) c FROM court_votes WHERE court_id=? GROUP BY vote", (court_id,)).fetchall()
         return {r["vote"]: r["c"] for r in rows}
 
 def clear_court(court_id):
     with gdb() as con:
         con.execute("DELETE FROM court_votes WHERE court_id=?", (court_id,))
 
-# ---------- kazik ----------
 def kazik_set(chat_id, user_id, step, what=None, on=None):
     with gdb() as con:
         con.execute("""INSERT INTO kazik_state (chat_id, user_id, step, bet_what, bet_on, updated)
                        VALUES (?, ?, ?, ?, ?, ?)
                        ON CONFLICT(chat_id, user_id) DO UPDATE SET
                          step=excluded.step, bet_what=excluded.bet_what,
-                         bet_on=excluded.bet_on, updated=excluded.updated""",
-                    (chat_id, user_id, step, what, on, int(time.time())))
+                         bet_on=excluded.bet_on, updated=excluded.updated""", (chat_id, user_id, step, what, on, int(time.time())))
 
 def kazik_get(chat_id, user_id):
     with gdb() as con:
-        return con.execute("SELECT * FROM kazik_state WHERE chat_id=? AND user_id=?",
-                           (chat_id, user_id)).fetchone()
+        return con.execute("SELECT * FROM kazik_state WHERE chat_id=? AND user_id=?", (chat_id, user_id)).fetchone()
 
 def kazik_clear(chat_id, user_id):
     with gdb() as con:
-        con.execute("DELETE FROM kazik_state WHERE chat_id=? AND user_id=?",
-                    (chat_id, user_id))
+        con.execute("DELETE FROM kazik_state WHERE chat_id=? AND user_id=?", (chat_id, user_id))
 
 # ============================================================
 #  УТИЛИТЫ
@@ -332,6 +281,13 @@ def humanize_minutes(sec):
 
 def today_str():
     return date.today().isoformat()
+
+def track_group_and_user(message):
+    """Принудительно записывает группу и юзера в базу, игнорируя ошибки"""
+    if is_group(message):
+        track_group(message.chat.id, message.chat.title or str(message.chat.id))
+        ensure_player(message.chat.id, message.from_user.id,
+                      message.from_user.username, message.from_user.first_name)
 
 # ============================================================
 #  КЭШ КОЛИЧЕСТВА УЧАСТНИКОВ ЧАТА
@@ -355,18 +311,12 @@ def get_member_count(chat_id):
 #  РЕГИСТРАЦИЯ КОМАНД
 # ============================================================
 GAME_COMMANDS = [
-    ("start", "👋 Приветствие и добавление в группу"),
-    ("help", "📖 Справочник команд"),
-    ("golda", "💰 Получить голду (раз в час)"),
-    ("stats", "🏆 Топ-10 богачей чата"),
-    ("gstats", "📊 Твой отчёт по голде"),
-    ("nation", "🌍 Случайная национальность"),
-    ("govno", "💩 Кинуть какашку (реплай)"),
-    ("word", "📰 Слово дня"),
-    ("obvinit", "⚖️ Обвинить юзера (реплай)"),
-    ("kloun", "🤡 Выбрать клоуна дня"),
-    ("kazik", "🎲 Сыграть в казик"),
-    ("pet", "🐾 Выбрать питомца (реплай, раз в день)"),
+    ("start", "👋 Приветствие и добавление в группу"), ("help", "📖 Справочник команд"),
+    ("golda", "💰 Получить голду (раз в час)"), ("stats", "🏆 Топ-10 богачей чата"),
+    ("gstats", "📊 Твой отчёт по голде"), ("nation", "🌍 Случайная национальность"),
+    ("govno", "💩 Кинуть какашку (реплай)"), ("word", "📰 Слово дня"),
+    ("obvinit", "⚖️ Обвинить юзера (реплай)"), ("kloun", "🤡 Выбрать клоуна дня"),
+    ("kazik", "🎲 Сыграть в казик"), ("pet", "🐾 Выбрать питомца (реплай, раз в день)"),
     ("marry", "💍 Пожениться (реплай)"),
 ]
 
@@ -388,135 +338,86 @@ def on_my_chat_member(upd: types.ChatMemberUpdated):
         try:
             kb = types.InlineKeyboardMarkup()
             kb.add(types.InlineKeyboardButton("➕ Добавить в группу", url=GROUP_URL))
-            bot.send_message(chat.id,
-                             "👋 Привет, группа!\n\n"
-                             "Я — игровой бот «Шутки за 200». "
-                             "Введи /help, чтобы посмотреть команды.",
-                             reply_markup=kb)
+            bot.send_message(chat.id, "👋 Привет, группа!\n\nЯ — игровой бот «Шутки за 200». Введи /help, чтобы посмотреть команды.", reply_markup=kb)
         except Exception:
             pass
 
 # ============================================================
-#  /start  и  /help
+#  ИГРОВЫЕ КОМАНДЫ (с внедренным трекингом)
 # ============================================================
 @bot.message_handler(commands=["start"])
 def cmd_start(message):
-    if is_group(message):
-        track_group(message.chat.id, message.chat.title or str(message.chat.id))
-        ensure_player(message.chat.id, message.from_user.id,
-                      message.from_user.username, message.from_user.first_name)
-        track_event(message.chat.id, message.from_user.id, "start")
+    track_group_and_user(message)
     name = message.from_user.first_name
-    text = (f"👋 Привет, {name}!\n\n"
-            "Я — игровой бот. При помощи меня можно кидаться какашками "
-            "и заниматься саморазвитием.\nДоступен только в группах.")
+    text = (f"👋 Привет, {name}!\n\nЯ — игровой бот. При помощи меня можно кидаться какашками и заниматься саморазвитием.\nДоступен только в группах.")
     kb = types.InlineKeyboardMarkup()
     kb.add(types.InlineKeyboardButton("➕ Добавить в группу", url=GROUP_URL))
     bot.send_message(message.chat.id, text, reply_markup=kb)
-
 
 @bot.message_handler(commands=["help"])
 def cmd_help(message):
     if not is_group(message):
         bot.reply_to(message, "📖 Справочник доступен в группах. Добавь меня в группу!")
         return
-    ensure_player(message.chat.id, message.from_user.id,
-                  message.from_user.username, message.from_user.first_name)
+    track_group_and_user(message)
     track_event(message.chat.id, message.from_user.id, "help")
-    text = ("📖 <b>СПРАВОЧНИК КОМАНД</b>\n\n"
-            "💰 /golda — получить голду (раз в 1 час)\n"
-            "🏆 /stats — топ-10 богачей чата\n"
-            "📊 /gstats — твой отчёт по голде\n"
-            "🌍 /nation — случайная национальность\n"
-            "💩 /govno (реплай) — кинуть какашку\n"
-            "📰 /word — слово дня\n"
-            "⚖️ /obvinit (реплай) — обвинить юзера\n"
-            "🤡 /kloun — выбрать клоуна дня\n"
-            "🎲 /kazik — сыграть в казик\n"
-            "🐾 /pet (реплай) — выбрать питомца (раз в день)\n"
-            "💍 /marry (реплай) — пожениться\n\n"
+    text = ("📖 <b>СПРАВОЧНИК КОМАНД</b>\n\n💰 /golda — получить голду (раз в 1 час)\n"
+            "🏆 /stats — топ-10 богачей чата\n📊 /gstats — твой отчёт по голде\n"
+            "🌍 /nation — случайная национальность\n💩 /govno (реплай) — кинуть какашку\n"
+            "📰 /word — слово дня\n⚖️ /obvinit (реплай) — обвинить юзера\n"
+            "🤡 /kloun — выбрать клоуна дня\n🎲 /kazik — сыграть в казик\n"
+            "🐾 /pet (реплай) — выбрать питомца (раз в день)\n💍 /marry (реплай) — пожениться\n\n"
             "💡 Все команды также доступны в меню «/».")
     bot.reply_to(message, text)
 
-# ============================================================
-#  /golda
-# ============================================================
 @bot.message_handler(commands=["golda"])
 def cmd_golda(message):
     if not is_group(message): return
-    ensure_player(message.chat.id, message.from_user.id,
-                  message.from_user.username, message.from_user.first_name)
+    track_group_and_user(message)
     p = get_player(message.chat.id, message.from_user.id)
     now = int(time.time())
     if now - p["last_gold"] < GOLDA_COOLDOWN:
-        left = GOLDA_COOLDOWN - (now - p["last_gold"])
-        bot.reply_to(message, f"⏳ <b>Кулдаун!</b>\n\nТы уже забирал голду. "
-                              f"Приходи через {humanize_minutes(left)} мин.")
+        bot.reply_to(message, f"⏳ <b>Кулдаун!</b>\n\nТы уже забирал голду. Приходи через {humanize_minutes(GOLDA_COOLDOWN - (now - p['last_gold']))} мин.")
         return
     amount = random.randint(0, 100)
     add_gold(message.chat.id, message.from_user.id, amount)
     set_last_gold(message.chat.id, message.from_user.id, now)
     track_event(message.chat.id, message.from_user.id, "golda")
-    bot.reply_to(message, f"💸 <b>ГОЛДА ПОЛУЧЕНА!</b>\n\n"
-                          f"Тебе начислено: {amount} 💰\n\n"
-                          f"Следующий сбор доступен через 1 час.")
+    bot.reply_to(message, f"💸 <b>ГОЛДА ПОЛУЧЕНА!</b>\n\nТебе начислено: {amount} 💰\n\nСледующий сбор доступен через 1 час.")
 
-# ============================================================
-#  /stats — в ЛС админ-статистика, в группе топ-10
-# ============================================================
 @bot.message_handler(commands=["stats"])
 def cmd_stats(message):
     if is_private(message):
-        if message.from_user.id != ADMIN_ID:
-            return
-
-        now = int(time.time())
-        week_ago = now - 7 * 86400
-
+        if message.from_user.id != ADMIN_ID: return
+        now = int(time.time()); week_ago = now - 7 * 86400
         with adb() as con:
             groups = con.execute("SELECT chat_id, title FROM groups").fetchall()
             events_total = con.execute("SELECT COUNT(*) c FROM events").fetchone()["c"]
-            events_week = con.execute(
-                "SELECT COUNT(*) c FROM events WHERE ts>?", (week_ago,)).fetchone()["c"]
-            users_seen = con.execute(
-                "SELECT COUNT(DISTINCT user_id) c FROM events").fetchone()["c"]
-
-        people_in_groups = 0
-        groups_with_error = 0
-        groups_active = 0
-        for g in groups:
-            cnt = get_member_count(g["chat_id"])
-            if cnt is None:
-                groups_with_error += 1
-                continue
-            groups_active += 1
-            people_in_groups += cnt
+            events_week = con.execute("SELECT COUNT(*) c FROM events WHERE ts>?", (week_ago,)).fetchone()["c"]
+            users_seen = con.execute("SELECT COUNT(DISTINCT user_id) c FROM events").fetchone()["c"]
+        
+        people_in_groups = sum([get_member_count(g["chat_id"]) or 0 for g in groups])
+        groups_with_error = sum([1 for g in groups if get_member_count(g["chat_id"]) is None])
+        groups_active = len(groups) - groups_with_error
 
         with gdb() as con:
             players_rows = con.execute("SELECT COUNT(*) c FROM players").fetchone()["c"]
-            unique_players = con.execute(
-                "SELECT COUNT(DISTINCT user_id) c FROM players").fetchone()["c"]
+            unique_players = con.execute("SELECT COUNT(DISTINCT user_id) c FROM players").fetchone()["c"]
 
-        text = (
-            "📈 <b>ПОЛНАЯ СТАТИСТИКА БОТА</b>\n\n"
-            "👥 <b>Охват аудитории:</b>\n"
-            f"• Людей в группах (всего): {people_in_groups}\n"
-            f"• Всего групп в базе: {len(groups)}\n"
-            f"• Групп с доступом: {groups_active}\n"
-            f"• Групп с ошибкой доступа: {groups_with_error}\n\n"
-            "🎮 <b>Вовлечённость:</b>\n"
-            f"• Уникальных активных игроков: {unique_players}\n"
-            f"• Всего записей в базе игроков: {players_rows}\n"
-            f"• Уникальных пользователей (по событиям): {users_seen}\n\n"
-            "🐞 <b>Игровой процесс:</b>\n"
-            f"• Всего событий (нажатий/действий): {events_total}\n"
-            f"• Событий за 7 дней: {events_week}\n\n"
-            "ℹ️ Дополнительно: /groups /globaltop /fullreport /ex /exall /debug"
-        )
+        text = ("📈 <b>ПОЛНАЯ СТАТИСТИКА БОТА</b>\n\n👥 <b>Охват аудитории:</b>\n"
+                f"• Людей в группах (всего): {people_in_groups}\n• Всего групп в базе: {len(groups)}\n"
+                f"• Групп с доступом: {groups_active}\n• Групп с ошибкой доступа: {groups_with_error}\n\n"
+                "🎮 <b>Вовлечённость:</b>\n"
+                f"• Уникальных активных игроков: {unique_players}\n• Всего записей в базе игроков: {players_rows}\n"
+                f"• Уникальных пользователей (по событиям): {users_seen}\n\n"
+                "🐞 <b>Игровой процесс:</b>\n"
+                f"• Всего событий (нажатий/действий): {events_total}\n• Событий за 7 дней: {events_week}\n\n"
+                "ℹ️ Дополнительно: /groups /globaltop /fullreport /ex /exall /debug")
         bot.send_message(message.chat.id, text)
         return
 
     if is_group(message):
+        track_group_and_user(message)
         rows = top_players(message.chat.id, 10)
         if not rows:
             bot.reply_to(message, "🏆 Пока нет игроков с голдой. Начни с /golda!")
@@ -527,52 +428,35 @@ def cmd_stats(message):
         bot.reply_to(message, "\n".join(lines))
         track_event(message.chat.id, message.from_user.id, "stats")
 
-# ============================================================
-#  /gstats
-# ============================================================
 @bot.message_handler(commands=["gstats"])
 def cmd_gstats(message):
     if not is_group(message): return
-    ensure_player(message.chat.id, message.from_user.id,
-                  message.from_user.username, message.from_user.first_name)
+    track_group_and_user(message)
     p = get_player(message.chat.id, message.from_user.id)
-    last = (datetime.fromtimestamp(p["last_gold"]).strftime("%d.%m %H:%M")
-            if p["last_gold"] else "ещё не собирал")
-    text = (f"📊 <b>ТВОЙ ОТЧЁТ</b>\n\n"
-            f"👤 {message.from_user.first_name}\n"
-            f"💰 Баланс: {p['gold']}\n"
-            f"📅 Последний сбор: {last}")
-    bot.reply_to(message, text)
+    last = datetime.fromtimestamp(p["last_gold"]).strftime("%d.%m %H:%M") if p["last_gold"] else "ещё не собирал"
+    bot.reply_to(message, f"📊 <b>ТВОЙ ОТЧЁТ</b>\n\n👤 {message.from_user.first_name}\n💰 Баланс: {p['gold']}\n📅 Последний сбор: {last}")
     track_event(message.chat.id, message.from_user.id, "gstats")
 
-# ============================================================
-#  /nation  и  /word
-# ============================================================
 @bot.message_handler(commands=["nation"])
 def cmd_nation(message):
     if not is_group(message): return
-    nat = random.choice(NATIONALITIES)
-    bot.reply_to(message, f"🧬 <b>АНАЛИЗ ДНК ЗАВЕРШЁН</b>\n\n"
-                          f"Твоя национальность: <b>{nat}</b>\n\n"
-                          f"Результат может измениться в следующий раз.")
+    track_group_and_user(message)
+    bot.reply_to(message, f"🧬 <b>АНАЛИЗ ДНК ЗАВЕРШЁН</b>\n\nТвоя национальность: <b>{random.choice(NATIONALITIES)}</b>\n\nРезультат может измениться в следующий раз.")
     track_event(message.chat.id, message.from_user.id, "nation")
-
 
 @bot.message_handler(commands=["word"])
 def cmd_word(message):
     if not is_group(message): return
+    track_group_and_user(message)
     bot.reply_to(message, f"📰 <b>СЛОВО ДНЯ</b>\n\n👉 {random.choice(WORDS_OF_DAY)}")
     track_event(message.chat.id, message.from_user.id, "word")
 
-# ============================================================
-#  /govno
-# ============================================================
 @bot.message_handler(commands=["govno"])
 def cmd_govno(message):
     if not is_group(message): return
+    track_group_and_user(message)
     if not message.reply_to_message:
-        bot.reply_to(message, "🎯 Кинь какашку кому-то! Для этого ответь на "
-                              "сообщение жертвы командой /govno")
+        bot.reply_to(message, "🎯 Кинь какашку кому-то! Для этого ответь на сообщение жертвы командой /govno")
         return
     target = message.reply_to_message.from_user
     if target.id == message.from_user.id:
@@ -583,19 +467,15 @@ def cmd_govno(message):
         return
     a = mention(message.from_user.id, message.from_user.first_name)
     b = mention(target.id, target.first_name)
-    text = random.choice(GOVNO_TEMPLATES).format(a=a, b=b)
-    bot.reply_to(message, text)
+    bot.reply_to(message, random.choice(GOVNO_TEMPLATES).format(a=a, b=b))
     track_event(message.chat.id, message.from_user.id, "govno")
 
-# ============================================================
-#  /obvinit
-# ============================================================
 @bot.message_handler(commands=["obvinit"])
 def cmd_obvinit(message):
     if not is_group(message): return
+    track_group_and_user(message)
     if not message.reply_to_message:
-        bot.reply_to(message, "⚖️ Чтобы обвинить кого-то, ответь на его сообщение "
-                              "командой /obvinit")
+        bot.reply_to(message, "⚖️ Чтобы обвинить кого-то, ответь на его сообщение командой /obvinit")
         return
     target = message.reply_to_message.from_user
     if target.id == message.from_user.id:
@@ -605,52 +485,32 @@ def cmd_obvinit(message):
         bot.reply_to(message, "🤖 Ботов обвинять нельзя.")
         return
 
-    tpl = random.choice(ACCUSATION_TEMPLATES)
-    accuser = message.from_user.first_name
-    defendant = target.first_name
-    accusation = tpl.format(defendant, accuser)
-
+    accusation = random.choice(ACCUSATION_TEMPLATES).format(target.first_name, message.from_user.first_name)
     court_id = f"{message.chat.id}:{message.message_id}"
-    text = (f"⚖️ <b>ОБВИНЕНИЕ В СУДЕ!</b>\n\n{accusation}\n\n"
-            f"🗳️ Голосуйте кнопками ниже! (1 минута)\n"
-            f"<i>Обвинитель всегда побеждает, но каждый голос «Виновен» — "
-            f"это -10 голды для жертвы!</i>")
-
+    text = (f"⚖️ <b>ОБВИНЕНИЕ В СУДЕ!</b>\n\n{accusation}\n\n🗳️ Голосуйте кнопками ниже! (1 минута)\n"
+            f"<i>Обвинитель всегда побеждает, но каждый голос «Виновен» — это -10 голды для жертвы!</i>")
     kb = types.InlineKeyboardMarkup()
-    kb.add(
-        types.InlineKeyboardButton("✅ Виновен (0)", callback_data=f"court:{court_id}:guilty"),
-        types.InlineKeyboardButton("❌ Опять невиновен (0)", callback_data=f"court:{court_id}:not"),
-    )
+    kb.add(types.InlineKeyboardButton("✅ Виновен (0)", callback_data=f"court:{court_id}:guilty"),
+           types.InlineKeyboardButton("❌ Опять невиновен (0)", callback_data=f"court:{court_id}:not"))
     sent = bot.send_message(message.chat.id, text, reply_markup=kb)
     track_event(message.chat.id, message.from_user.id, "obvinit")
 
-    chat_id = message.chat.id
-    target_id = target.id
+    chat_id, target_id = message.chat.id, target.id
 
     def finish():
         time.sleep(COURT_DURATION)
         tally = court_tally(court_id)
-        guilty = tally.get("guilty", 0)
-        notv = tally.get("not", 0)
-        fine = guilty * 10
-        taken = take_gold(chat_id, target_id, fine)
-        result = (
-            f"⚖️ <b>СУД ОКОНЧЕН!</b>\n\n━━━━━━━━━━━━━━━\n\n{accusation}\n\n"
-            f"━━━━━━━━━━━━━━━\n\n"
-            f"✅ Голосов за обвинение: {guilty}\n\n"
-            f"❌ Голосов против: {notv} (проигнорированы)\n\n"
-            f"👨‍⚖️ Вердикт: 🟢 <b>ПРАВДА!</b> Обвиняемый официально признан виновным.\n\n"
-            f"💸 Обвиняемый оштрафован на {taken} голды!"
-        )
+        guilty, notv = tally.get("guilty", 0), tally.get("not", 0)
+        taken = take_gold(chat_id, target_id, guilty * 10)
+        result = (f"⚖️ <b>СУД ОКОНЧЕН!</b>\n\n━━━━━━━━━━━━━━━\n\n{accusation}\n\n━━━━━━━━━━━━━━━\n\n"
+                  f"✅ Голосов за обвинение: {guilty}\n\n❌ Голосов против: {notv} (проигнорированы)\n\n"
+                  f"👨‍⚖️ Вердикт: 🟢 <b>ПРАВДА!</b> Обвиняемый официально признан виновным.\n\n"
+                  f"💸 Обвиняемый оштрафован на {taken} голды!")
         try:
-            bot.edit_message_text(result, chat_id=sent.chat.id,
-                                  message_id=sent.message_id)
-        except Exception:
-            pass
+            bot.edit_message_text(result, chat_id=sent.chat.id, message_id=sent.message_id)
+        except Exception: pass
         clear_court(court_id)
-
     threading.Thread(target=finish, daemon=True).start()
-
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("court:"))
 def cb_court(call):
@@ -659,106 +519,68 @@ def cb_court(call):
     _, court_id, vote = parts
     court_vote(court_id, call.from_user.id, vote)
     tally = court_tally(court_id)
-    g = tally.get("guilty", 0)
-    n = tally.get("not", 0)
     kb = types.InlineKeyboardMarkup()
-    kb.add(
-        types.InlineKeyboardButton(f"✅ Виновен ({g})", callback_data=f"court:{court_id}:guilty"),
-        types.InlineKeyboardButton(f"❌ Опять невиновен ({n})", callback_data=f"court:{court_id}:not"),
-    )
+    kb.add(types.InlineKeyboardButton(f"✅ Виновен ({tally.get('guilty', 0)})", callback_data=f"court:{court_id}:guilty"),
+           types.InlineKeyboardButton(f"❌ Опять невиновен ({tally.get('not', 0)})", callback_data=f"court:{court_id}:not"))
     try:
-        bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id,
-                                      reply_markup=kb)
-    except Exception:
-        pass
+        bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=kb)
+    except Exception: pass
     bot.answer_callback_query(call.id, "Голос учтён!")
 
-# ============================================================
-#  /kloun
-# ============================================================
 @bot.message_handler(commands=["kloun"])
 def cmd_kloun(message):
     if not is_group(message): return
-    chat_id = message.chat.id
-    today = today_str()
+    track_group_and_user(message)
+    chat_id, today = message.chat.id, today_str()
     existing = get_clown(chat_id)
     if existing and existing["day"] == today:
-        bot.reply_to(message, f"🤡 Сегодняшний Клоун дня уже выбран!\n\n"
-                              f"Это {existing['name']}. Ждите завтра.")
+        bot.reply_to(message, f"🤡 Сегодняшний Клоун дня уже выбран!\n\nЭто {existing['name']}. Ждите завтра.")
         return
 
     players = chat_players(chat_id)
     ids = {p["user_id"]: p["first_name"] for p in players}
     ids[message.from_user.id] = message.from_user.first_name
-    if not ids:
-        bot.reply_to(message, "🎪 Цирк пуст! Сначала кто-нибудь должен написать /golda.")
-        return
     uid, name = random.choice(list(ids.items()))
     reason = random.choice(CLOWN_REASONS)
     set_clown(chat_id, uid, name, reason, today)
     track_event(chat_id, message.from_user.id, "kloun")
-    bot.reply_to(message, f"🎪 <b>ЦИРК ПРИЕХАЛ!</b>\n\n"
-                          f"🤡 Клоун дня в этом чате — <b>{name}</b>\n\n"
-                          f"📌 Причина: {reason}")
+    bot.reply_to(message, f"🎪 <b>ЦИРК ПРИЕХАЛ!</b>\n\n🤡 Клоун дня в этом чате — <b>{name}</b>\n\n📌 Причина: {reason}")
 
-# ============================================================
-#  /kazik
-# ============================================================
 @bot.message_handler(commands=["kazik"])
 def cmd_kazik(message):
     if not is_group(message): return
-    chat_id = message.chat.id
-    uid = message.from_user.id
-    ensure_player(chat_id, uid, message.from_user.username, message.from_user.first_name)
-    kazik_set(chat_id, uid, step=1)
-    track_event(chat_id, uid, "kazik_start")
-    bot.reply_to(message, "🎲 <b>КАЗИК</b>\n\nНа что хочешь поставить?\n\n"
-                          "(например: «то что Сева толстый»)")
+    track_group_and_user(message)
+    kazik_set(message.chat.id, message.from_user.id, step=1)
+    track_event(message.chat.id, message.from_user.id, "kazik_start")
+    bot.reply_to(message, "🎲 <b>КАЗИК</b>\n\nНа что хочешь поставить?\n\n(например: «то что Сева толстый»)")
 
-
-@bot.message_handler(func=lambda m: is_group(m) and
-                     kazik_get(m.chat.id, m.from_user.id) is not None and
-                     kazik_get(m.chat.id, m.from_user.id)["step"] in (1, 2),
-                     content_types=["text"])
+@bot.message_handler(func=lambda m: is_group(m) and kazik_get(m.chat.id, m.from_user.id) is not None and kazik_get(m.chat.id, m.from_user.id)["step"] in (1, 2), content_types=["text"])
 def kazik_step(message):
-    chat_id = message.chat.id
-    uid = message.from_user.id
+    chat_id, uid = message.chat.id, message.from_user.id
     st = kazik_get(chat_id, uid)
     if not st: return
     text = (message.text or "").strip()
     if not text:
         bot.reply_to(message, "🤔 Пусто. Напиши что-нибудь!")
         return
-
     if st["step"] == 1:
         kazik_set(chat_id, uid, step=2, what=text)
-        bot.reply_to(message, "🎯 А что ты хочешь поставить?\n\n"
-                              "(например: «свою огромную попу»)")
+        bot.reply_to(message, "🎯 А что ты хочешь поставить?\n\n(например: «свою огромную попу»)")
         return
-
     if st["step"] == 2:
-        what = st["bet_what"]
-        on = text
         win = random.random() < 0.5
-        if win:
-            out = (f"🎉 <b>ВЫИГРАЛ!</b>\n\nТы поставил: «{what}»\n"
-                   f"На кону было: «{on}»\n\nКазик решил: ДА! ✅")
-        else:
-            out = (f"😢 <b>ПРОИГРАЛ!</b>\n\nТы поставил: «{what}»\n"
-                   f"На кону было: «{on}»\n\nКазик решил: НЕТ! ❌")
+        out = (f"🎉 <b>ВЫИГРАЛ!</b>\n\nТы поставил: «{st['bet_what']}»\nНа кону было: «{text}»\n\nКазик решил: ДА! ✅" if win else
+               f"😢 <b>ПРОИГРАЛ!</b>\n\nТы поставил: «{st['bet_what']}»\nНа кону было: «{text}»\n\nКазик решил: НЕТ! ❌")
         kazik_clear(chat_id, uid)
         track_event(chat_id, uid, "kazik")
         bot.reply_to(message, out)
 
-# ============================================================
-#  /pet
-# ============================================================
 @bot.message_handler(commands=["pet"])
 def cmd_pet(message):
     if not is_group(message): return
+    track_group_and_user(message)
     if not message.reply_to_message:
-        bot.reply_to(message, "🐾 Чтобы выбрать питомца, ответь на сообщение "
-                              "человека командой /pet")
+        bot.reply_to(message, "🐾 Чтобы выбрать питомца, ответь на сообщение человека командой /pet")
         return
     target = message.reply_to_message.from_user
     if target.id == message.from_user.id:
@@ -767,33 +589,22 @@ def cmd_pet(message):
     if target.is_bot:
         bot.reply_to(message, "🤖 Бот не может быть питомцем, он и так всем служит.")
         return
-
-    chat_id = message.chat.id
-    uid = message.from_user.id
-    ensure_player(chat_id, uid, message.from_user.username, message.from_user.first_name)
+    chat_id, uid = message.chat.id, message.from_user.id
     p = get_player(chat_id, uid)
     now = int(time.time())
-    if p["last_pet"]:
-        last_day = datetime.fromtimestamp(p["last_pet"]).date()
-        if last_day == date.today():
-            bot.reply_to(message, "🐾 Ты уже выбирал питомца сегодня. Приходи завтра!")
-            return
-
-    emoji = random.choice(["🐕", "🐈", "🐹", "🦜"])
+    if p["last_pet"] and datetime.fromtimestamp(p["last_pet"]).date() == date.today():
+        bot.reply_to(message, "🐾 Ты уже выбирал питомца сегодня. Приходи завтра!")
+        return
     set_pet(chat_id, uid, target.id, target.first_name, now)
     track_event(chat_id, uid, "pet")
-    bot.reply_to(message, f"🐾 <b>ПИТОМЕЦ ВЫБРАН!</b>\n\n"
-                          f"{target.first_name} теперь твой питомец на сегодня! {emoji}")
+    bot.reply_to(message, f"🐾 <b>ПИТОМЕЦ ВЫБРАН!</b>\n\n{target.first_name} теперь твой питомец на сегодня! {random.choice(['🐕', '🐈', '🐹', '🦜'])}")
 
-# ============================================================
-#  /marry
-# ============================================================
 @bot.message_handler(commands=["marry"])
 def cmd_marry(message):
     if not is_group(message): return
+    track_group_and_user(message)
     if not message.reply_to_message:
-        bot.reply_to(message, "💍 Чтобы пожениться, ответь на сообщение партнёра "
-                              "командой /marry")
+        bot.reply_to(message, "💍 Чтобы пожениться, ответь на сообщение партнёра командой /marry")
         return
     target = message.reply_to_message.from_user
     if target.id == message.from_user.id:
@@ -802,57 +613,37 @@ def cmd_marry(message):
     if target.is_bot:
         bot.reply_to(message, "🤖 Бот не может жениться, у него обет безбрачия.")
         return
-
-    chat_id = message.chat.id
-    uid = message.from_user.id
-    ensure_player(chat_id, uid, message.from_user.username, message.from_user.first_name)
+    chat_id, uid = message.chat.id, message.from_user.id
     ensure_player(chat_id, target.id, target.username, target.first_name)
-    me = get_player(chat_id, uid)
-    other = get_player(chat_id, target.id)
-
+    me, other = get_player(chat_id, uid), get_player(chat_id, target.id)
     if me["marry_id"]:
         bot.reply_to(message, f"💍 {me['first_name']} уже состоит в браке!")
         return
     if other["marry_id"]:
         bot.reply_to(message, f"💍 {other['first_name']} уже состоит в браке!")
         return
-
     marry(chat_id, uid, target.id)
     track_event(chat_id, uid, "marry")
-    bot.reply_to(message, f"💍 <b>СВАДЬБА!</b>\n\n"
-                          f"{me['first_name']} и {target.first_name} теперь женаты! 💒\n\n"
-                          f"Горько! 🥂")
+    bot.reply_to(message, f"💍 <b>СВАДЬБА!</b>\n\n{me['first_name']} и {target.first_name} теперь женаты! 💒\n\nГорько! 🥂")
 
 # ============================================================
 #  АДМИН-КОМАНДЫ
 # ============================================================
 def admin_only(func):
     def wrapper(message, *args, **kwargs):
-        if not is_private(message):
-            return
-        if message.from_user.id != ADMIN_ID:
-            return
+        if not is_private(message) or message.from_user.id != ADMIN_ID: return
         return func(message, *args, **kwargs)
     return wrapper
-
 
 @bot.message_handler(commands=["adminhelp"])
 @admin_only
 def cmd_adminhelp(message):
-    text = ("👑 <b>Команды администратора</b>\n\n"
-            "📊 Аналитика:\n"
-            "• /stats — Подробная статистика (в ЛС)\n"
-            "• /fullreport — Выгрузить ВСЮ аналитику в TXT\n"
-            "• /ex — Графики за 7 дней\n"
-            "• /exall — Графики за всё время\n"
-            "• /groups — Список групп из базы\n"
-            "• /globaltop — Глобальный топ игроков\n"
-            "• /debug — Диагностика БД\n\n"
-            "🛠 Управление:\n"
-            "• /an (ответом) — Рассылка\n"
-            "• /do — Скачать базы данных")
+    text = ("👑 <b>Команды администратора</b>\n\n📊 Аналитика:\n"
+            "• /stats — Подробная статистика (в ЛС)\n• /fullreport — Выгрузить ВСЮ аналитику в TXT\n"
+            "• /ex — Графики за 7 дней\n• /exall — Графики за всё время\n• /groups — Список групп из базы\n"
+            "• /globaltop — Глобальный топ игроков\n• /debug — Диагностика БД\n\n"
+            "🛠 Управление:\n• /an (ответом) — Рассылка\n• /do — Скачать базы данных")
     bot.send_message(message.chat.id, text)
-
 
 @bot.message_handler(commands=["fullreport"])
 @admin_only
@@ -863,65 +654,37 @@ def cmd_fullreport(message):
         lines.append(f"Всего групп: {len(groups)}\n")
         for g in groups:
             title = g["title"] or "?"
-            try:
-                chat = bot.get_chat(g["chat_id"])
-                title = chat.title or title
-            except Exception:
-                pass
+            try: title = bot.get_chat(g["chat_id"]).title or title
+            except Exception: pass
             lines.append(f"• {title} (id={g['chat_id']})")
             with gdb() as gcon:
-                ps = gcon.execute(
-                    "SELECT user_id, first_name, username, gold FROM players WHERE chat_id=?",
-                    (g["chat_id"],)).fetchall()
-                if not ps:
-                    lines.append("    (игроков пока нет)")
-                for p in ps:
-                    lines.append(f"    - {p['first_name']} (@{p['username'] or '-'}) "
-                                 f"id={p['user_id']} gold={p['gold']}")
+                ps = gcon.execute("SELECT user_id, first_name, username, gold FROM players WHERE chat_id=?", (g["chat_id"],)).fetchall()
+                if not ps: lines.append("    (игроков пока нет)")
+                for p in ps: lines.append(f"    - {p['first_name']} (@{p['username'] or '-'}) id={p['user_id']} gold={p['gold']}")
             lines.append("")
-        total_events = con.execute("SELECT COUNT(*) c FROM events").fetchone()["c"]
-        lines.append(f"Всего событий: {total_events}")
-    data = "\n".join(lines).encode("utf-8")
-    bot.send_document(message.chat.id, ("report.txt", data))
-
+        lines.append(f"Всего событий: {con.execute('SELECT COUNT(*) c FROM events').fetchone()['c']}")
+    bot.send_document(message.chat.id, ("report.txt", "\n".join(lines).encode("utf-8")))
 
 @bot.message_handler(commands=["groups"])
 @admin_only
 def cmd_groups(message):
-    with adb() as con:
-        groups = con.execute("SELECT * FROM groups ORDER BY added_at").fetchall()
-    if not groups:
-        bot.send_message(message.chat.id,
-                         "Групп пока нет.\n"
-                         "Добавь бота в группу — он сразу отреагирует на событие "
-                         "my_chat_member и запишется в БД.")
-        return
+    with adb() as con: groups = con.execute("SELECT * FROM groups ORDER BY added_at").fetchall()
+    if not groups: return bot.send_message(message.chat.id, "Групп пока нет.")
     lines = ["📋 <b>Группы из базы:</b>"]
     for g in groups:
         title = g["title"] or "?"
-        try:
-            chat = bot.get_chat(g["chat_id"])
-            title = chat.title or title
-        except Exception:
-            title += " (нет доступа)"
+        try: title = bot.get_chat(g["chat_id"]).title or title
+        except Exception: title += " (нет доступа)"
         lines.append(f"• {title} — <code>{g['chat_id']}</code>")
     bot.send_message(message.chat.id, "\n".join(lines))
-
 
 @bot.message_handler(commands=["globaltop"])
 @admin_only
 def cmd_globaltop(message):
-    with gdb() as con:
-        rows = con.execute("SELECT chat_id, first_name, gold FROM players "
-                           "WHERE gold>0 ORDER BY gold DESC LIMIT 20").fetchall()
-    if not rows:
-        bot.send_message(message.chat.id, "Пусто.")
-        return
-    lines = ["🌍 <b>ГЛОБАЛЬНЫЙ ТОП</b>"]
-    for i, r in enumerate(rows, 1):
-        lines.append(f"{i}. {r['first_name']} (chat {r['chat_id']}) — {r['gold']} 💰")
+    with gdb() as con: rows = con.execute("SELECT chat_id, first_name, gold FROM players WHERE gold>0 ORDER BY gold DESC LIMIT 20").fetchall()
+    if not rows: return bot.send_message(message.chat.id, "Пусто.")
+    lines = ["🌍 <b>ГЛОБАЛЬНЫЙ ТОП</b>"] + [f"{i}. {r['first_name']} (chat {r['chat_id']}) — {r['gold']} 💰" for i, r in enumerate(rows, 1)]
     bot.send_message(message.chat.id, "\n".join(lines))
-
 
 @bot.message_handler(commands=["debug"])
 @admin_only
@@ -932,84 +695,57 @@ def cmd_debug(message):
         glist = con.execute("SELECT chat_id, title FROM groups").fetchall()
     with gdb() as con:
         p = con.execute("SELECT COUNT(*) c FROM players").fetchone()["c"]
-        sample = con.execute(
-            "SELECT chat_id, user_id, first_name, gold FROM players LIMIT 10").fetchall()
+        sample = con.execute("SELECT chat_id, user_id, first_name, gold FROM players LIMIT 10").fetchall()
 
-    parts = [f"groups={len(glist)}, events={e}, players={p}",
-             f"matplotlib={'OK' if HAS_MPL else 'НЕ УСТАНОВЛЕН'}",
-             f"python={sys.executable}", "", "Группы:"]
+    parts = [f"groups={len(glist)}, events={e}, players={p}", f"matplotlib={'OK' if HAS_MPL else 'НЕ УСТАНОВЛЕН'}",
+             f"python={sys.executable}", f"game.db={GAME_DB}", "", "Группы:"]
     for r in glist:
         title = r["title"] or "?"
-        try:
-            chat = bot.get_chat(r["chat_id"])
-            title = chat.title or title
-        except Exception:
-            title += " (нет доступа)"
+        try: title = bot.get_chat(r["chat_id"]).title or title
+        except Exception: title += " (нет доступа)"
         parts.append(f"  {r['chat_id']} — {title}")
-    parts.append("")
-    parts.append("Последние события:")
-    for r in recent:
-        parts.append(f"  {r['event']} chat={r['chat_id']} user={r['user_id']} "
-                     f"{datetime.fromtimestamp(r['ts']):%m-%d %H:%M}")
-    parts.append("")
-    parts.append("Игроки (пример):")
-    for r in sample:
-        parts.append(f"  {r['first_name']} chat={r['chat_id']} gold={r['gold']}")
+    parts.append("\nПоследние события:")
+    for r in recent: parts.append(f"  {r['event']} chat={r['chat_id']} user={r['user_id']} {datetime.fromtimestamp(r['ts']):%m-%d %H:%M}")
+    parts.append("\nИгроки (пример):")
+    for r in sample: parts.append(f"  {r['first_name']} chat={r['chat_id']} gold={r['gold']}")
     bot.send_message(message.chat.id, "\n".join(parts))
-
 
 @bot.message_handler(commands=["do"])
 @admin_only
 def cmd_do(message):
     for path in (GAME_DB, ANALYTICS_DB):
         if os.path.exists(path):
-            with open(path, "rb") as f:
-                bot.send_document(message.chat.id, (path, f.read()))
-
+            with open(path, "rb") as f: bot.send_document(message.chat.id, (os.path.basename(path), f.read()))
 
 @bot.message_handler(commands=["an"])
 @admin_only
 def cmd_an(message):
-    if not message.reply_to_message:
-        bot.send_message(message.chat.id, "Ответь на сообщение, которое нужно разослать.")
-        return
+    if not message.reply_to_message: return bot.send_message(message.chat.id, "Ответь на сообщение, которое нужно разослать.")
     src = message.reply_to_message
-    with adb() as con:
-        groups = con.execute("SELECT chat_id FROM groups").fetchall()
+    with adb() as con: groups = con.execute("SELECT chat_id FROM groups").fetchall()
     ok = fail = 0
     for g in groups:
         try:
             bot.copy_message(g["chat_id"], src.chat.id, src.message_id)
-            ok += 1
-            time.sleep(0.05)
-        except Exception:
-            fail += 1
+            ok += 1; time.sleep(0.05)
+        except Exception: fail += 1
     bot.send_message(message.chat.id, f"✅ Успешно: {ok}\n❌ Ошибок: {fail}")
-
 
 @bot.message_handler(commands=["ex", "exall"])
 @admin_only
 def cmd_ex(message):
     is_all = message.text.startswith("/exall")
     since = 0 if is_all else int(time.time()) - 7 * 86400
-
     with adb() as con:
         events_rows = con.execute("SELECT ts FROM events WHERE ts>? ORDER BY ts", (since,)).fetchall()
         groups_ts = con.execute("SELECT added_at FROM groups WHERE added_at>?", (since,)).fetchall()
-
-    if not events_rows and not groups_ts:
-        bot.send_message(message.chat.id, "Нет данных за выбранный период.")
-        return
+    if not events_rows and not groups_ts: return bot.send_message(message.chat.id, "Нет данных за выбранный период.")
 
     from collections import Counter
     events_counter = Counter(datetime.fromtimestamp(r["ts"]).strftime("%Y-%m-%d") for r in events_rows)
     new_players_counter = Counter(datetime.fromtimestamp(r["added_at"]).strftime("%Y-%m-%d") for r in groups_ts)
-
     all_dates_str = sorted(set(list(events_counter.keys()) + list(new_players_counter.keys())))
-    
-    if not all_dates_str:
-        bot.send_message(message.chat.id, "Нет данных за выбранный период.")
-        return
+    if not all_dates_str: return bot.send_message(message.chat.id, "Нет данных.")
 
     xs_dt = [datetime.strptime(d, "%Y-%m-%d") for d in all_dates_str]
     ys_events = [events_counter.get(d, 0) for d in all_dates_str]
@@ -1019,42 +755,22 @@ def cmd_ex(message):
         plt.style.use('default')
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
         fig.patch.set_facecolor('#ffffff')
-
-        # === ГРАФИК 1: Прирост (всего) — Столбчатая диаграмма ===
-        bars = ax1.bar(xs_dt, ys_new_players, width=0.6, color='#007bff', label='Новые игроки')
-        
-        title1 = "👤 Прирост (всё время)" if is_all else "👤 Прирост (7 дней)"
-        ax1.set_title(title1, fontsize=16, fontweight='bold', color='#555555', pad=15)
+        ax1.bar(xs_dt, ys_new_players, width=0.6, color='#007bff', label='Новые игроки')
+        ax1.set_title("👤 Прирост (всё время)" if is_all else "👤 Прирост (7 дней)", fontsize=16, fontweight='bold', color='#555555', pad=15)
         ax1.legend(loc='upper center', frameon=False, fontsize=12)
-        
-        ax1.spines['top'].set_visible(False)
-        ax1.spines['right'].set_visible(False)
-        ax1.spines['left'].set_visible(False)
-        ax1.spines['bottom'].set_color('#dddddd')
-        ax1.tick_params(axis='both', colors='#555555', labelsize=10)
-        ax1.grid(axis='y', color='#eeeeee', linestyle='-', linewidth=1)
-        ax1.set_axisbelow(True)
+        for spine in ['top', 'right', 'left']: ax1.spines[spine].set_visible(False)
+        ax1.spines['bottom'].set_color('#dddddd'); ax1.tick_params(axis='both', colors='#555555', labelsize=10)
+        ax1.grid(axis='y', color='#eeeeee', linestyle='-', linewidth=1); ax1.set_axisbelow(True)
         ax1.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
 
-        # === ГРАФИК 2: Нажатия (всего) — Линейный график с заливкой ===
         line_color = '#28a745'
-        ax2.plot(xs_dt, ys_events, marker='o', color=line_color, linewidth=2, 
-                 markerfacecolor='white', markeredgewidth=2, markersize=6, label='Нажатий')
+        ax2.plot(xs_dt, ys_events, marker='o', color=line_color, linewidth=2, markerfacecolor='white', markeredgewidth=2, markersize=6, label='Нажатий')
         ax2.fill_between(xs_dt, ys_events, color=line_color, alpha=0.15)
-        
-        title2 = "⚙️ Нажатия (всё время)" if is_all else "⚙️ Нажатия (7 дней)"
-        ax2.set_title(title2, fontsize=16, fontweight='bold', color='#555555', pad=15)
-        
-        legend_elements = [Line2D([0], [0], color=line_color, lw=2, label='Нажатий')]
-        ax2.legend(handles=legend_elements, loc='upper center', frameon=False, fontsize=12)
-
-        ax2.spines['top'].set_visible(False)
-        ax2.spines['right'].set_visible(False)
-        ax2.spines['left'].set_visible(False)
-        ax2.spines['bottom'].set_color('#dddddd')
-        ax2.tick_params(axis='both', colors='#555555', labelsize=10)
-        ax2.grid(axis='y', color='#eeeeee', linestyle='-', linewidth=1)
-        ax2.set_axisbelow(True)
+        ax2.set_title("⚙️ Нажатия (всё время)" if is_all else "⚙️ Нажатия (7 дней)", fontsize=16, fontweight='bold', color='#555555', pad=15)
+        ax2.legend(handles=[Line2D([0], [0], color=line_color, lw=2, label='Нажатий')], loc='upper center', frameon=False, fontsize=12)
+        for spine in ['top', 'right', 'left']: ax2.spines[spine].set_visible(False)
+        ax2.spines['bottom'].set_color('#dddddd'); ax2.tick_params(axis='both', colors='#555555', labelsize=10)
+        ax2.grid(axis='y', color='#eeeeee', linestyle='-', linewidth=1); ax2.set_axisbelow(True)
         ax2.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
 
         for ax in [ax1, ax2]:
@@ -1063,50 +779,35 @@ def cmd_ex(message):
             plt.setp(ax.get_xticklabels(), rotation=30, ha='right')
 
         fig.tight_layout(pad=3.0)
-        
-        buf = io.BytesIO()
-        fig.savefig(buf, format="png", dpi=150, bbox_inches='tight')
-        buf.seek(0)
-        plt.close(fig)
+        buf = io.BytesIO(); fig.savefig(buf, format="png", dpi=150, bbox_inches='tight'); buf.seek(0); plt.close(fig)
         bot.send_photo(message.chat.id, buf)
         return
 
-    text = "📊 <b>Статистика (текст)</b>\n\n"
-    text += "<b>Прирост:</b>\n"
-    for d, c in zip(all_dates_str, ys_new_players):
-        text += f"  {d}: {c}\n"
+    text = "📊 <b>Статистика (текст)</b>\n\n<b>Прирост:</b>\n"
+    for d, c in zip(all_dates_str, ys_new_players): text += f"  {d}: {c}\n"
     text += "\n<b>Нажатия:</b>\n"
-    for d, c in zip(all_dates_str, ys_events):
-        text += f"  {d}: {c}\n"
+    for d, c in zip(all_dates_str, ys_events): text += f"  {d}: {c}\n"
     bot.send_message(message.chat.id, text)
 
-
 # ============================================================
-#  ФОНОВЫЙ ТРЕКИНГ
+#  ФОНОВЫЙ ТРЕКИНГ (для обычных сообщений)
 # ============================================================
-@bot.message_handler(func=lambda m: True,
-                     content_types=["text", "photo", "sticker", "video",
-                                    "voice", "document", "audio"])
+@bot.message_handler(func=lambda m: True, content_types=["text", "photo", "sticker", "video", "voice", "document", "audio"])
 def track_all(message):
-    if not is_group(message):
-        return
-    track_group(message.chat.id, message.chat.title or str(message.chat.id))
-    ensure_player(message.chat.id, message.from_user.id,
-                  message.from_user.username, message.from_user.first_name)
-    if message.content_type == "text" and (message.text or "").startswith("/"):
-        return
+    if not is_group(message): return
+    track_group_and_user(message)
+    if message.content_type == "text" and (message.text or "").startswith("/"): return
     track_event(message.chat.id, message.from_user.id, "message")
-
 
 # ============================================================
 #  MAIN
 # ============================================================
 if __name__ == "__main__":
-    if not BOT_TOKEN:
-        raise SystemExit("Не задан BOT_TOKEN")
+    if not BOT_TOKEN: raise SystemExit("Не задан BOT_TOKEN")
     init_dbs()
     register_commands()
     print(f"[init] python={sys.executable}")
+    print(f"[init] БД: {GAME_DB}")
     print(f"[init] matplotlib={'OK' if HAS_MPL else 'НЕ УСТАНОВЛЕН (текстовый вывод)'}")
     print("Бот запущен...")
     bot.infinity_polling(skip_pending=True, timeout=30)
