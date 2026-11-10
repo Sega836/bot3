@@ -319,10 +319,6 @@ GAME_COMMANDS = [
     ("marry", "💍 Пожениться (реплай)"),
 ]
 
-ADMIN_COMMANDS = [
-    ("adminhelp", "👑 Админ-команды"),
-]
-
 def register_commands():
     cmds = [types.BotCommand(c, d) for c, d in GAME_COMMANDS]
     bot.set_my_commands(cmds)
@@ -332,6 +328,11 @@ def register_commands():
 # ============================================================
 @bot.message_handler(commands=["start"])
 def cmd_start(message):
+    if is_group(message):
+        track_group(message.chat.id, message.chat.title or str(message.chat.id))
+        ensure_player(message.chat.id, message.from_user.id,
+                      message.from_user.username, message.from_user.first_name)
+        track_event(message.chat.id, message.from_user.id, "start")
     name = message.from_user.first_name
     text = (f"👋 Привет, {name}!\n\n"
             "Я — игровой бот. При помощи меня можно кидаться какашками "
@@ -346,6 +347,9 @@ def cmd_help(message):
     if not is_group(message):
         bot.reply_to(message, "📖 Справочник доступен в группах. Добавь меня в группу!")
         return
+    ensure_player(message.chat.id, message.from_user.id,
+                  message.from_user.username, message.from_user.first_name)
+    track_event(message.chat.id, message.from_user.id, "help")
     text = ("📖 <b>СПРАВОЧНИК КОМАНД</b>\n\n"
             "💰 /golda — получить голду (раз в 1 час)\n"
             "🏆 /stats — топ-10 богачей чата\n"
@@ -385,11 +389,15 @@ def cmd_golda(message):
                           f"Следующий сбор доступен через 1 час.")
 
 # ============================================================
-#  /stats  и  /gstats
+#  /stats  (топ чата — только группы)
 # ============================================================
 @bot.message_handler(commands=["stats"])
 def cmd_stats(message):
-    if not is_group(message): return
+    if not is_group(message):
+        # в ЛС подсказываем админский вариант
+        if message.from_user.id == ADMIN_ID:
+            bot.reply_to(message, "👑 Админ-статистика: /astats")
+        return
     rows = top_players(message.chat.id, 10)
     if not rows:
         bot.reply_to(message, "🏆 Пока нет игроков с голдой. Начни с /golda!")
@@ -398,8 +406,11 @@ def cmd_stats(message):
     for i, r in enumerate(rows, 1):
         lines.append(f"{i}. {r['first_name']} — {r['gold']} 💰")
     bot.reply_to(message, "\n".join(lines))
+    track_event(message.chat.id, message.from_user.id, "stats")
 
-
+# ============================================================
+#  /gstats
+# ============================================================
 @bot.message_handler(commands=["gstats"])
 def cmd_gstats(message):
     if not is_group(message): return
@@ -413,6 +424,7 @@ def cmd_gstats(message):
             f"💰 Баланс: {p['gold']}\n"
             f"📅 Последний сбор: {last}")
     bot.reply_to(message, text)
+    track_event(message.chat.id, message.from_user.id, "gstats")
 
 # ============================================================
 #  /nation  и  /word
@@ -477,7 +489,6 @@ def cmd_obvinit(message):
     tpl = random.choice(ACCUSATION_TEMPLATES)
     accuser = message.from_user.first_name
     defendant = target.first_name
-    # шаблоны: первая подстановка — обвиняемый, вторая — обвинитель
     accusation = tpl.format(defendant, accuser)
 
     court_id = f"{message.chat.id}:{message.message_id}"
@@ -494,13 +505,16 @@ def cmd_obvinit(message):
     sent = bot.send_message(message.chat.id, text, reply_markup=kb)
     track_event(message.chat.id, message.from_user.id, "obvinit")
 
+    chat_id = message.chat.id
+    target_id = target.id
+
     def finish():
         time.sleep(COURT_DURATION)
         tally = court_tally(court_id)
         guilty = tally.get("guilty", 0)
         notv = tally.get("not", 0)
         fine = guilty * 10
-        taken = take_gold(message.chat.id, target.id, fine)
+        taken = take_gold(chat_id, target_id, fine)
         result = (
             f"⚖️ <b>СУД ОКОНЧЕН!</b>\n\n━━━━━━━━━━━━━━━\n\n{accusation}\n\n"
             f"━━━━━━━━━━━━━━━\n\n"
@@ -555,7 +569,6 @@ def cmd_kloun(message):
         return
 
     players = chat_players(chat_id)
-    # Добавим текущего пользователя, если ещё нет
     ids = {p["user_id"]: p["first_name"] for p in players}
     ids[message.from_user.id] = message.from_user.first_name
     if not ids:
@@ -579,6 +592,7 @@ def cmd_kazik(message):
     uid = message.from_user.id
     ensure_player(chat_id, uid, message.from_user.username, message.from_user.first_name)
     kazik_set(chat_id, uid, step=1)
+    track_event(chat_id, uid, "kazik_start")
     bot.reply_to(message, "🎲 <b>КАЗИК</b>\n\nНа что хочешь поставить?\n\n"
                           "(например: «то что Сева толстый»)")
 
@@ -640,7 +654,6 @@ def cmd_pet(message):
     ensure_player(chat_id, uid, message.from_user.username, message.from_user.first_name)
     p = get_player(chat_id, uid)
     now = int(time.time())
-    # "раз в день" — сравнение по календарному дню
     if p["last_pet"]:
         last_day = datetime.fromtimestamp(p["last_pet"]).date()
         if last_day == date.today():
@@ -709,28 +722,29 @@ def admin_only(func):
 def cmd_adminhelp(message):
     text = ("👑 <b>Команды администратора</b>\n\n"
             "📊 Аналитика:\n"
-            "• /stats — Подробная статистика\n"
+            "• /astats — Подробная статистика\n"
             "• /fullreport — Выгрузить ВСЮ аналитику в TXT\n"
             "• /ex — Графики за 7 дней\n"
             "• /exall — Графики за всё время\n"
             "• /groups — Список групп из базы\n"
-            "• /globaltop — Глобальный топ игроков\n\n"
+            "• /globaltop — Глобальный топ игроков\n"
+            "• /debug — Диагностика БД\n\n"
             "🛠 Управление:\n"
             "• /an (ответом) — Рассылка\n"
             "• /do — Скачать базы данных")
     bot.send_message(message.chat.id, text)
 
 
-@bot.message_handler(commands=["stats"])
+@bot.message_handler(commands=["astats"])
 @admin_only
 def cmd_admin_stats(message):
     now = int(time.time())
+    week_ago = now - 7 * 86400
     with adb() as con:
         groups_total = con.execute("SELECT COUNT(*) c FROM groups").fetchone()["c"]
         users_total = con.execute("SELECT COUNT(DISTINCT user_id) c FROM events").fetchone()["c"]
         records = con.execute("SELECT COUNT(*) c FROM events").fetchone()["c"]
-        week = con.execute("SELECT COUNT(*) c FROM events WHERE ts>?", (now - 7*86400,)).fetchone()["c"]
-    # людей в группах (по player-таблице во всех чатах)
+        week = con.execute("SELECT COUNT(*) c FROM events WHERE ts>?", (week_ago,)).fetchone()["c"]
     with gdb() as con:
         players = con.execute("SELECT COUNT(DISTINCT user_id) c FROM players").fetchone()["c"]
     text = ("📈 <b>ПОЛНАЯ СТАТИСТИКА БОТА</b>\n\n"
@@ -757,10 +771,14 @@ def cmd_fullreport(message):
         for g in groups:
             lines.append(f"• {g['title']} (id={g['chat_id']})")
             with gdb() as gcon:
-                ps = gcon.execute("SELECT user_id, first_name, gold FROM players WHERE chat_id=?",
-                                  (g["chat_id"],)).fetchall()
+                ps = gcon.execute(
+                    "SELECT user_id, first_name, username, gold FROM players WHERE chat_id=?",
+                    (g["chat_id"],)).fetchall()
+                if not ps:
+                    lines.append("    (игроков пока нет)")
                 for p in ps:
-                    lines.append(f"    - {p['first_name']} (id={p['user_id']}) gold={p['gold']}")
+                    lines.append(f"    - {p['first_name']} (@{p['username'] or '-'}) "
+                                 f"id={p['user_id']} gold={p['gold']}")
             lines.append("")
         total_events = con.execute("SELECT COUNT(*) c FROM events").fetchone()["c"]
         lines.append(f"Всего событий: {total_events}")
@@ -795,6 +813,33 @@ def cmd_globaltop(message):
     for i, r in enumerate(rows, 1):
         lines.append(f"{i}. {r['first_name']} (chat {r['chat_id']}) — {r['gold']} 💰")
     bot.send_message(message.chat.id, "\n".join(lines))
+
+
+@bot.message_handler(commands=["debug"])
+@admin_only
+def cmd_debug(message):
+    with adb() as con:
+        g = con.execute("SELECT COUNT(*) c FROM groups").fetchone()["c"]
+        e = con.execute("SELECT COUNT(*) c FROM events").fetchone()["c"]
+        recent = con.execute("SELECT * FROM events ORDER BY ts DESC LIMIT 10").fetchall()
+        glist = con.execute("SELECT chat_id, title FROM groups").fetchall()
+    with gdb() as con:
+        p = con.execute("SELECT COUNT(*) c FROM players").fetchone()["c"]
+        sample = con.execute(
+            "SELECT chat_id, user_id, first_name, gold FROM players LIMIT 10").fetchall()
+    parts = [f"groups={g}, events={e}, players={p}", "", "Группы:"]
+    for r in glist:
+        parts.append(f"  {r['chat_id']} — {r['title']}")
+    parts.append("")
+    parts.append("Последние события:")
+    for r in recent:
+        parts.append(f"  {r['event']} chat={r['chat_id']} user={r['user_id']} "
+                     f"{datetime.fromtimestamp(r['ts']):%m-%d %H:%M}")
+    parts.append("")
+    parts.append("Игроки (пример):")
+    for r in sample:
+        parts.append(f"  {r['first_name']} chat={r['chat_id']} gold={r['gold']}")
+    bot.send_message(message.chat.id, "\n".join(parts))
 
 
 @bot.message_handler(commands=["do"])
@@ -833,6 +878,7 @@ def cmd_ex(message):
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+        from collections import Counter
     except ImportError:
         bot.send_message(message.chat.id, "matplotlib не установлен.")
         return
@@ -840,12 +886,14 @@ def cmd_ex(message):
     is_all = message.text.startswith("/exall")
     since = 0 if is_all else int(time.time()) - 7 * 86400
     with adb() as con:
-        rows = con.execute("SELECT ts FROM events WHERE ts>? ORDER BY ts", (since,)).fetchall()
+        rows = con.execute("SELECT ts, event FROM events WHERE ts>? ORDER BY ts",
+                           (since,)).fetchall()
     if not rows:
-        bot.send_message(message.chat.id, "Нет данных.")
+        bot.send_message(message.chat.id,
+                         "Нет данных за выбранный период.\n"
+                         "События пишутся при игровых действиях и обычных сообщениях.")
         return
 
-    from collections import Counter
     days = Counter(datetime.fromtimestamp(r["ts"]).strftime("%Y-%m-%d") for r in rows)
     xs = sorted(days)
     ys = [days[d] for d in xs]
@@ -864,12 +912,24 @@ def cmd_ex(message):
 
 
 # ============================================================
-#  СЛУЖЕБНЫЙ ХЭНДЛЕР: отслеживание групп
+#  ФОНОВЫЙ ТРЕКИНГ ГРУПП / ИГРОКОВ / СООБЩЕНИЙ
+#  ВАЖНО: регистрируется ПОСЛЕ всех командных хэндлеров,
+#  поэтому команды обрабатываются своими хэндлерами,
+#  а сюда попадают только не-команды.
 # ============================================================
-@bot.message_handler(func=lambda m: True, content_types=["text", "photo", "sticker", "video"])
+@bot.message_handler(func=lambda m: True,
+                     content_types=["text", "photo", "sticker", "video",
+                                    "voice", "document", "audio"])
 def track_all(message):
-    if is_group(message):
-        track_group(message.chat.id, message.chat.title or str(message.chat.id))
+    if not is_group(message):
+        return
+    track_group(message.chat.id, message.chat.title or str(message.chat.id))
+    ensure_player(message.chat.id, message.from_user.id,
+                  message.from_user.username, message.from_user.first_name)
+    # команды уже залогированы своими хэндлерами
+    if message.content_type == "text" and (message.text or "").startswith("/"):
+        return
+    track_event(message.chat.id, message.from_user.id, "message")
 
 
 # ============================================================
