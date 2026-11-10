@@ -1,19 +1,50 @@
 # bot.py
 # Запуск: BOT_TOKEN=xxx python bot.py
 # Зависимости: pip install pyTelegramBotAPI
-# Опционально: pip install matplotlib  (для графиков; без него — ASCII-график)
+# matplotlib ставится автоматически при старте (если есть права), иначе — ASCII-график
 
 import os
-import io
+import sys
 import time
+import io
 import random
 import sqlite3
 import threading
+import subprocess
 from datetime import datetime, date
 from contextlib import contextmanager
 
 import telebot
 from telebot import types
+
+# ============================================================
+#  АВТОУСТАНОВКА И ИМПОРТ MATPLOTLIB
+# ============================================================
+def _ensure_matplotlib():
+    try:
+        import matplotlib  # noqa: F401
+        return True
+    except Exception:
+        print("[init] matplotlib не найден, пробую установить...")
+        try:
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", "--quiet", "matplotlib"]
+            )
+            import matplotlib  # noqa: F401
+            print("[init] matplotlib успешно установлен")
+            return True
+        except Exception as e:
+            print(f"[init] Не удалось установить matplotlib: {e}. "
+                  f"Будет использован ASCII-график.")
+            return False
+
+HAS_MPL = _ensure_matplotlib()
+
+if HAS_MPL:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from collections import Counter as _Counter
 
 # ============================================================
 #  КОНФИГ
@@ -29,16 +60,6 @@ ANALYTICS_DB = "analytics.db"
 GOLDA_COOLDOWN = 3600
 KAZIK_TIMEOUT = 120
 COURT_DURATION = 60
-
-# Пробуем импортировать matplotlib один раз при старте
-try:
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from collections import Counter as _Counter
-    HAS_MPL = True
-except Exception:
-    HAS_MPL = False
 
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 
@@ -312,7 +333,6 @@ def today_str():
     return date.today().isoformat()
 
 def ascii_bar_chart(xs, ys, width=30):
-    """ASCII-фолбэк, если matplotlib недоступен."""
     if not xs:
         return "Нет данных."
     maxy = max(ys) or 1
@@ -321,6 +341,24 @@ def ascii_bar_chart(xs, ys, width=30):
         bar = "█" * max(1, int(width * y / maxy))
         lines.append(f"{x}: {bar} {y}")
     return "\n".join(lines)
+
+# ============================================================
+#  КЭШ КОЛИЧЕСТВА УЧАСТНИКОВ ЧАТА
+# ============================================================
+_member_cache = {}
+_MEMBER_CACHE_TTL = 600
+
+def get_member_count(chat_id):
+    now = int(time.time())
+    cached = _member_cache.get(chat_id)
+    if cached and now - cached[1] < _MEMBER_CACHE_TTL:
+        return cached[0]
+    try:
+        cnt = bot.get_chat_member_count(chat_id)
+        _member_cache[chat_id] = (cnt, now)
+        return cnt
+    except Exception:
+        return None
 
 # ============================================================
 #  РЕГИСТРАЦИЯ КОМАНД
@@ -346,7 +384,7 @@ def register_commands():
     bot.set_my_commands(cmds)
 
 # ============================================================
-#  ДОБАВЛЕНИЕ БОТА В ГРУППУ / УДАЛЕНИЕ  (работает даже в privacy mode)
+#  ДОБАВЛЕНИЕ/УДАЛЕНИЕ БОТА В ГРУППЕ
 # ============================================================
 @bot.my_chat_member_handler()
 def on_my_chat_member(upd: types.ChatMemberUpdated):
@@ -356,7 +394,6 @@ def on_my_chat_member(upd: types.ChatMemberUpdated):
     status = upd.new_chat_member.status
     if status in ("member", "administrator", "creator"):
         track_group(chat.id, chat.title or str(chat.id))
-        # сразу пытаемся поприветствовать, если стали админом/добавили
         try:
             kb = types.InlineKeyboardMarkup()
             kb.add(types.InlineKeyboardButton("➕ Добавить в группу", url=GROUP_URL))
@@ -367,9 +404,6 @@ def on_my_chat_member(upd: types.ChatMemberUpdated):
                              reply_markup=kb)
         except Exception:
             pass
-    elif status in ("left", "kicked"):
-        # можно пометить как неактивную, но оставим для истории
-        pass
 
 # ============================================================
 #  /start  и  /help
@@ -437,45 +471,61 @@ def cmd_golda(message):
                           f"Следующий сбор доступен через 1 час.")
 
 # ============================================================
-#  /stats  — универсальный:
-#    • в ЛС + админ  → полная аналитика
-#    • в группе      → топ-10 чата
+#  /stats — в ЛС админ-статистика, в группе топ-10
 # ============================================================
 @bot.message_handler(commands=["stats"])
 def cmd_stats(message):
     if is_private(message):
         if message.from_user.id != ADMIN_ID:
             return
-        # ---------- АДМИН-СТАТИСТИКА ----------
+
         now = int(time.time())
         week_ago = now - 7 * 86400
+
         with adb() as con:
-            groups_total = con.execute("SELECT COUNT(*) c FROM groups").fetchone()["c"]
-            users_total = con.execute(
-                "SELECT COUNT(DISTINCT user_id) c FROM events").fetchone()["c"]
-            records = con.execute("SELECT COUNT(*) c FROM events").fetchone()["c"]
-            week = con.execute(
+            groups = con.execute("SELECT chat_id, title FROM groups").fetchall()
+            events_total = con.execute("SELECT COUNT(*) c FROM events").fetchone()["c"]
+            events_week = con.execute(
                 "SELECT COUNT(*) c FROM events WHERE ts>?", (week_ago,)).fetchone()["c"]
+            users_seen = con.execute(
+                "SELECT COUNT(DISTINCT user_id) c FROM events").fetchone()["c"]
+
+        people_in_groups = 0
+        groups_with_error = 0
+        groups_active = 0
+        for g in groups:
+            cnt = get_member_count(g["chat_id"])
+            if cnt is None:
+                groups_with_error += 1
+                continue
+            groups_active += 1
+            people_in_groups += cnt
+
         with gdb() as con:
-            players = con.execute(
+            players_rows = con.execute("SELECT COUNT(*) c FROM players").fetchone()["c"]
+            unique_players = con.execute(
                 "SELECT COUNT(DISTINCT user_id) c FROM players").fetchone()["c"]
-        text = ("📈 <b>ПОЛНАЯ СТАТИСТИКА БОТА</b>\n\n"
-                f"👥 Охват аудитории:\n"
-                f"• Людей в группах (игроки): {players}\n"
-                f"• Всего активных групп: {groups_total}\n"
-                f"• Групп с ошибкой доступа: 0\n\n"
-                f"🎮 Вовлечённость:\n"
-                f"• Уникальных игроков (всего): {users_total}\n"
-                f"• Всего записей в базе: {records}\n\n"
-                f"🐞 Игровой процесс:\n"
-                f"• Всего нажатий: {records}\n"
-                f"• Нажатий за 7 дней: {week}\n\n"
-                f"ℹ️ Дополнительно: /groups /globaltop /fullreport /ex /exall /debug")
+
+        text = (
+            "📈 <b>ПОЛНАЯ СТАТИСТИКА БОТА</b>\n\n"
+            "👥 <b>Охват аудитории:</b>\n"
+            f"• Людей в группах (всего): {people_in_groups}\n"
+            f"• Всего групп в базе: {len(groups)}\n"
+            f"• Групп с доступом: {groups_active}\n"
+            f"• Групп с ошибкой доступа: {groups_with_error}\n\n"
+            "🎮 <b>Вовлечённость:</b>\n"
+            f"• Уникальных активных игроков: {unique_players}\n"
+            f"• Всего записей в базе игроков: {players_rows}\n"
+            f"• Уникальных пользователей (по событиям): {users_seen}\n\n"
+            "🐞 <b>Игровой процесс:</b>\n"
+            f"• Всего событий (нажатий/действий): {events_total}\n"
+            f"• Событий за 7 дней: {events_week}\n\n"
+            "ℹ️ Дополнительно: /groups /globaltop /fullreport /ex /exall /debug"
+        )
         bot.send_message(message.chat.id, text)
         return
 
     if is_group(message):
-        # ---------- ТОП ЧАТА ----------
         rows = top_players(message.chat.id, 10)
         if not rows:
             bot.reply_to(message, "🏆 Пока нет игроков с голдой. Начни с /golda!")
@@ -821,7 +871,6 @@ def cmd_fullreport(message):
         groups = con.execute("SELECT * FROM groups ORDER BY added_at").fetchall()
         lines.append(f"Всего групп: {len(groups)}\n")
         for g in groups:
-            # Подтягиваем актуальное название из API, если в БД нет
             title = g["title"] or "?"
             try:
                 chat = bot.get_chat(g["chat_id"])
@@ -896,7 +945,8 @@ def cmd_debug(message):
             "SELECT chat_id, user_id, first_name, gold FROM players LIMIT 10").fetchall()
 
     parts = [f"groups={len(glist)}, events={e}, players={p}",
-             f"matplotlib={'OK' if HAS_MPL else 'НЕ УСТАНОВЛЕН'}", "", "Группы:"]
+             f"matplotlib={'OK' if HAS_MPL else 'НЕ УСТАНОВЛЕН'}",
+             f"python={sys.executable}", "", "Группы:"]
     for r in glist:
         title = r["title"] or "?"
         try:
@@ -965,7 +1015,6 @@ def cmd_ex(message):
     xs = sorted(days)
     ys = [days[d] for d in xs]
 
-    # ---- matplotlib есть → PNG ----
     if HAS_MPL:
         fig, ax = plt.subplots(figsize=(10, 5))
         ax.plot(xs, ys, marker="o")
@@ -980,18 +1029,15 @@ def cmd_ex(message):
         bot.send_photo(message.chat.id, buf)
         return
 
-    # ---- matplotlib нет → ASCII-фолбэк ----
     chart = ascii_bar_chart(xs, ys)
     header = ("📊 <b>Активность</b>"
               + (" (всё время)" if is_all else " (7 дней)"))
     footer = ("\n\n<i>Совет: установи matplotlib в тот же venv, где запущен бот, "
               "чтобы получать PNG-графики: pip install matplotlib</i>")
-    # Telegram лимит 4096 символов
     body = chart
     max_len = 3500
     if len(body) > max_len:
-        body = body[-max_len:]
-        body = "…(начало обрезано)\n" + body
+        body = "…(начало обрезано)\n" + body[-max_len:]
     bot.send_message(message.chat.id, header + "\n\n<pre>" + body + "</pre>" + footer)
 
 
@@ -1020,5 +1066,7 @@ if __name__ == "__main__":
         raise SystemExit("Не задан BOT_TOKEN")
     init_dbs()
     register_commands()
-    print(f"Бот запущен... matplotlib={'OK' if HAS_MPL else 'НЕ УСТАНОВЛЕН (будет ASCII-график)'}")
+    print(f"[init] python={sys.executable}")
+    print(f"[init] matplotlib={'OK' if HAS_MPL else 'НЕ УСТАНОВЛЕН (ASCII-график)'}")
+    print("Бот запущен...")
     bot.infinity_polling(skip_pending=True, timeout=30)
